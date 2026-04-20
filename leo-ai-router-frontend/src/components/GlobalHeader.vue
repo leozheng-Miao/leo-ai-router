@@ -1,48 +1,87 @@
 <template>
   <a-layout-header class="header">
     <div class="header-inner">
-      <!-- 左侧 Logo -->
+      <!-- Logo -->
       <RouterLink to="/" class="brand">
-        <img class="logo" src="@/assets/logo.png" alt="logo" />
-        <span class="site-title">AI Router</span>
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect width="28" height="28" rx="7" fill="url(#logoGrad)" />
+            <path
+              d="M8 9h12M8 14h8M8 19h12"
+              stroke="#fff"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+            <defs>
+              <linearGradient
+                id="logoGrad"
+                x1="0"
+                y1="0"
+                x2="28"
+                y2="28"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stop-color="#2563EB" />
+                <stop offset="1" stop-color="#7C3AED" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="brand-name">LeoAI Router</span>
+        <span class="brand-tag">Beta</span>
       </RouterLink>
 
-      <!-- 中间导航 -->
-      <nav class="nav-menu">
-        <a-menu
-          v-model:selectedKeys="selectedKeys"
-          mode="horizontal"
-          :items="menuItems"
-          class="menu"
-          @click="handleMenuClick"
-        />
+      <!-- Nav -->
+      <nav class="nav-links">
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.path"
+          :to="item.path"
+          class="nav-link"
+          :class="{ active: isActive(item.path) }"
+        >
+          {{ item.label }}
+        </RouterLink>
       </nav>
 
-      <!-- 右侧用户区 -->
-      <div class="user-area">
+      <!-- Right -->
+      <div class="header-right">
+        <a href="#" class="doc-link" target="_blank">
+          <FileTextOutlined />
+          <span>文档</span>
+        </a>
+
         <template v-if="loginUserStore.loginUser.id">
-          <a-dropdown placement="bottomRight">
-            <div class="user-info">
-              <a-avatar :src="loginUserStore.loginUser.userAvatar" :size="32" class="avatar">
-                {{ loginUserStore.loginUser.userName?.charAt(0) ?? 'U' }}
+          <a-dropdown placement="bottomRight" :trigger="['click']">
+            <div class="user-trigger">
+              <a-avatar :src="loginUserStore.loginUser.userAvatar" :size="28" class="user-avatar">
+                {{ userInitial }}
               </a-avatar>
-              <span class="username">{{ loginUserStore.loginUser.userName ?? '用户' }}</span>
-              <DownOutlined class="arrow-icon" />
+              <span class="user-name">{{ loginUserStore.loginUser.userName ?? '用户' }}</span>
+              <DownOutlined class="chevron" />
             </div>
             <template #overlay>
-              <a-menu class="user-dropdown">
-                <a-menu-item key="logout" @click="doLogout">
-                  <LogoutOutlined />
-                  <span>退出登录</span>
+              <a-menu class="user-menu">
+                <a-menu-item key="info" disabled>
+                  <div class="menu-user-info">
+                    <div class="menu-user-name">{{ loginUserStore.loginUser.userName }}</div>
+                    <div class="menu-user-role">
+                      {{ loginUserStore.loginUser.userRole === 'admin' ? '管理员' : '普通用户' }}
+                    </div>
+                  </div>
+                </a-menu-item>
+                <a-menu-divider />
+                <a-menu-item key="logout" @click="handleLogout">
+                  <LogoutOutlined /> 退出登录
                 </a-menu-item>
               </a-menu>
             </template>
           </a-dropdown>
         </template>
+
         <template v-else>
-          <RouterLink to="/user/login">
-            <a-button type="primary" class="login-btn">登录</a-button>
-          </RouterLink>
+          <RouterLink to="/user/login" class="btn-login">登录</RouterLink>
+          <RouterLink to="/user/register" class="btn-register">免费注册</RouterLink>
         </template>
       </div>
     </div>
@@ -50,51 +89,37 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { type MenuProps, message } from 'ant-design-vue'
-import { useLoginUserStore } from '@/stores/loginUser.ts'
-import { userLogout } from '@/api/userController.ts'
-import { LogoutOutlined, HomeOutlined, DownOutlined, KeyOutlined } from '@ant-design/icons-vue'
-import { h } from 'vue'
+import { computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { message } from 'ant-design-vue'
+import { DownOutlined, LogoutOutlined, FileTextOutlined } from '@ant-design/icons-vue'
+import { useLoginUserStore } from '@/stores/loginUser'
+import { userLogout } from '@/api/userController'
 
-const loginUserStore = useLoginUserStore()
 const router = useRouter()
-const selectedKeys = ref<string[]>(['/'])
+const route = useRoute()
+const loginUserStore = useLoginUserStore()
 
-router.afterEach((to) => {
-  selectedKeys.value = [to.path]
-})
-
-const originItems: MenuProps['items'] = [
-  { key: '/', icon: () => h(HomeOutlined), label: '主页', title: '主页' },
-  { key: '/admin/userManage', label: '用户管理', title: '用户管理' },
+const navItems = [
+  { label: '首页', path: '/' },
+  { label: '模型广场', path: '/models' },
+  { label: '价格', path: '/pricing' },
 ]
 
-const menuItems = computed<MenuProps['items']>(() =>
-  originItems?.filter((menu) => {
-    const key = menu?.key as string
-    if (key?.startsWith('/admin')) {
-      return loginUserStore.loginUser?.userRole === 'admin'
-    }
-    return true
-  }),
+const isActive = (path: string) => (path === '/' ? route.path === '/' : route.path.startsWith(path))
+
+const userInitial = computed(() =>
+  (loginUserStore.loginUser.userName ?? 'U').charAt(0).toUpperCase(),
 )
 
-const handleMenuClick: MenuProps['onClick'] = (e) => {
-  const key = e.key as string
-  selectedKeys.value = [key]
-  if (key.startsWith('/')) router.push(key)
-}
-
-const doLogout = async () => {
+const handleLogout = async () => {
   const res = await userLogout()
   if (res.data.code === 0) {
     loginUserStore.setLoginUser({ userName: '未登录' })
-    message.success('退出登录成功')
-    await router.push('/user/login')
+    message.success('已退出登录')
+    router.push('/user/login')
   } else {
-    message.error('退出登录失败，' + res.data.message)
+    message.error('退出失败：' + res.data.message)
   }
 }
 </script>
@@ -104,107 +129,188 @@ const doLogout = async () => {
   position: sticky;
   top: 0;
   z-index: 100;
-  height: 64px;
-  background: rgba(255, 255, 255, 0.92);
+  height: 56px;
+  line-height: 56px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid #e5e7eb;
   padding: 0;
-  line-height: 64px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .header-inner {
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 24px;
+  gap: 32px;
   height: 100%;
   display: flex;
   align-items: center;
-  gap: 24px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-decoration: none;
   flex-shrink: 0;
 }
 
-.logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+.logo-icon {
+  display: flex;
+  align-items: center;
 }
 
-.site-title {
-  font-size: 18px;
+.brand-name {
+  font-size: 15px;
   font-weight: 700;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  white-space: nowrap;
+  color: #111827;
+  letter-spacing: -0.3px;
 }
 
-.nav-menu {
+.brand-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: #7c3aed;
+  background: #f5f3ff;
+  border: 1px solid #e9d5ff;
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 16px;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   flex: 1;
 }
 
-.menu {
-  border-bottom: none !important;
-  background: transparent;
-  line-height: 62px;
-}
-
-.user-area {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  padding: 4px 12px 4px 4px;
-  border-radius: 24px;
-  transition: background 0.2s;
-}
-
-.user-info:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.avatar {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  color: #fff;
-  font-weight: 600;
-}
-
-.username {
+.nav-link {
+  padding: 0 12px;
   font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.nav-link:hover {
+  color: #111827;
+  background: #f3f4f6;
+}
+.nav-link.active {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.doc-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #6b7280;
+  text-decoration: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.doc-link:hover {
   color: #374151;
-  max-width: 100px;
+  background: #f3f4f6;
+}
+
+.user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.15s;
+}
+
+.user-trigger:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.user-avatar {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.arrow-icon {
-  font-size: 11px;
+.chevron {
+  font-size: 10px;
   color: #9ca3af;
 }
 
-.login-btn {
-  border-radius: 20px;
-  padding: 0 20px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  border: none;
-  font-weight: 500;
+.menu-user-info {
+  padding: 2px 0;
+}
+.menu-user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+.menu-user-role {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 1px;
 }
 
-.login-btn:hover {
+.btn-login {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  text-decoration: none;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.15s;
+}
+
+.btn-login:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #111827;
+}
+
+.btn-register {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+  padding: 6px 14px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  transition: opacity 0.15s;
+}
+
+.btn-register:hover {
   opacity: 0.88;
 }
 </style>
