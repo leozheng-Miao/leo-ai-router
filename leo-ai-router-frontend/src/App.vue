@@ -6,7 +6,7 @@ import BasicLayout from '@/layouts/BasicLayout.vue'
   <BasicLayout />
 </template>
 
-<style scoped>
+<style>
 :root {
   --color-bg-page: #f0f2f5;
   --color-bg-card: #ffffff;
