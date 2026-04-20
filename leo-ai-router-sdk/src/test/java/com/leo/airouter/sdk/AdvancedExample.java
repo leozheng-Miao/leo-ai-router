@@ -30,7 +30,7 @@ public class AdvancedExample {
                             ChatMessage.assistant("Java 是一种面向对象的编程语言..."),
                             ChatMessage.user("它的主要特点是什么？")
                     ))
-                    .model("deepseek-chat")
+                    .model("qwen-turbo")
                     .temperature(0.7)
                     .build();
 

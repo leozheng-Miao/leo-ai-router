@@ -24,7 +24,7 @@ public class ReasoningExample {
 
             // 构建启用深度思考的请求
             ChatRequest request = ChatRequest.builder()
-                    .model("qwen-plus")  // 支持深度思考的模型
+                    .model("deepseek-reasoner")  // 支持深度思考的模型
                     .messages(Arrays.asList(
                             ChatMessage.user("请详细解释量子纠缠现象，并给出实际应用")
                     ))

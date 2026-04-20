@@ -42,7 +42,7 @@ public class InternalChatController {
      * 支持流式和非流式响应
      */
     @PostMapping(value = "/completions", produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE})
-    @AuthCheck(mustRole = UserConstant.DEFAULT_ROLE)
+//    @AuthCheck(mustRole = UserConstant.DEFAULT_ROLE)
     @Operation(summary = "内部聊天接口")
     @RateLimit(type = RateLimit.LimitType.IP, limit = 30)
     public Object chatCompletions(@RequestBody ChatRequest request,

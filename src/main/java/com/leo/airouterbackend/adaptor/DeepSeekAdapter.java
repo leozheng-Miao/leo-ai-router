@@ -7,10 +7,10 @@ import com.leo.airouterbackend.model.dto.chat.ChatRequest;
 import com.leo.airouterbackend.model.dto.chat.StreamChunk;
 import com.leo.airouterbackend.model.entity.Model;
 import com.leo.airouterbackend.model.entity.ModelProvider;
+import io.netty.channel.ChannelOption;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -21,17 +21,23 @@ import org.springframework.ai.deepseek.DeepSeekAssistantMessage;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.deepseek.api.DeepSeekApi;
+import org.springframework.http.client.ReactorClientHttpRequestFactory;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
+import reactor.netty.http.client.HttpClient;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * DeepSeek 模型适配器
  * 使用 spring-ai-starter-model-deepseek 依赖
- *
  */
 @Slf4j
 @Component
@@ -44,13 +50,19 @@ public class DeepSeekAdapter implements ModelAdapter {
 
     @Override
     public ChatResponse invoke(Model model, ModelProvider provider, ChatRequest chatRequest) {
+        DeepSeekChatModel chatModel = createChatModel(provider, model);
+        Prompt prompt = buildPrompt(chatRequest, model);
         try {
-            DeepSeekChatModel chatModel = createChatModel(provider, model);
-            Prompt prompt = buildPrompt(chatRequest, model);
             return chatModel.call(prompt);
         } catch (Exception e) {
-            log.error("DeepSeek 适配器调用模型 {} 失败", model.getModelKey(), e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "调用模型失败: " + e.getMessage());
+            log.error("DeepSeek 适配器调用失败，模型: {}, baseUrl: {}, apiKey前缀: {}",
+                    model.getModelKey(),
+                    provider.getBaseUrl(),
+                    StringUtils.left(provider.getApiKey(), 10) + "...",
+                    e);   // 把异常对象作为最后一个参数传入，会打印完整堆栈
+            Throwable cause = e.getCause();
+            String errorDetail = cause != null ? cause.toString() : e.toString();
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "调用模型失败: " + errorDetail);
         }
     }
 
@@ -127,9 +139,24 @@ public class DeepSeekAdapter implements ModelAdapter {
      * 创建 DeepSeek ChatModel
      */
     private DeepSeekChatModel createChatModel(ModelProvider provider, Model model) {
+        // 创建具有明确超时配置的 HttpClient
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 30_000)   // 连接超时 30 秒
+                .responseTimeout(Duration.ofSeconds(90));               // 响应超时 90 秒
+
+        // 构建自定义 RestClient
+        RestClient.Builder restClientBuilder = RestClient.builder()
+                .requestFactory(new ReactorClientHttpRequestFactory(httpClient));
+
+        // 构建自定义 WebClient
+        WebClient.Builder webClientBuilder = WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(httpClient));
+
         DeepSeekApi deepSeekApi = DeepSeekApi.builder()
                 .baseUrl(provider.getBaseUrl())
                 .apiKey(provider.getApiKey())
+                .restClientBuilder(restClientBuilder)
+                .webClientBuilder(webClientBuilder)
                 .build();
 
         DeepSeekChatOptions options = DeepSeekChatOptions.builder()
@@ -148,6 +175,7 @@ public class DeepSeekAdapter implements ModelAdapter {
     private Prompt buildPrompt(ChatRequest chatRequest, Model model) {
         List<Message> messages = chatRequest.getMessages().stream()
                 .map(this::convertMessage)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
         DeepSeekChatOptions.Builder optionsBuilder = DeepSeekChatOptions.builder()
@@ -170,10 +198,14 @@ public class DeepSeekAdapter implements ModelAdapter {
         String role = msg.getRole();
         if ("system".equals(role)) {
             return new SystemMessage(msg.getContent());
-        } else if ("assistant".equals(role)) {
-            return new AssistantMessage(msg.getContent());
-        } else {
+        }
+//        else if ("assistant".equals(role)) {
+//            return new AssistantMessage(msg.getContent());
+//        }
+        else if ("user".equals(role)) {
             return new UserMessage(msg.getContent());
+        } else {
+            return null;
         }
     }
 }

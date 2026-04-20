@@ -47,3 +47,7 @@ mail:
   from: 1154027884@qq.com
   code-expire: 300      # ?????????
   code-cool-down: 60    # ?????????
+logging:
+  level:
+    org.springframework.web.client.RestClient: DEBUG
+    org.springframework.http: DEBUG

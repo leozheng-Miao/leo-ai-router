@@ -44,7 +44,7 @@ public class DashscopeAdapter implements ModelAdapter {
             return chatModel.call(prompt);
         } catch (Exception e) {
             log.error("DashScope 适配器调用模型 {} 失败", model.getModelKey(), e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "调用模型失败: " + e.getMessage());
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "调用模型失败: " + e.getClass().getName() + " - " + e.getMessage());
         }
     }
 
