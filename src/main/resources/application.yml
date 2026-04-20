@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: leo-ai-router
+  profiles:
+    active: local
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/leo_ai_router?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: clx740329
+  # Session
+  session:
+    store-type: redis
+    # session 30 ???
+    timeout: 2592000
+  # Redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 1
+server:
+  port: 8123
+  servlet:
+    context-path: /api
+    # cookie 30 ???
+    session:
+      cookie:
+        max-age: 2592000
+# MyBatis Flex
+mybatis-flex:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+# springdoc-openapi
+springdoc:
+  group-configs:
+    - group: 'default'
+      packages-to-scan: com.leo.airouterbackend.controller
+# knife4j
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+# ?????????
+mail:
+  from: 1154027884@qq.com
+  code-expire: 300      # ?????????
+  code-cool-down: 60    # ?????????

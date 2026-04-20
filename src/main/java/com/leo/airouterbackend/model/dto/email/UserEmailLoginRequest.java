@@ -1,0 +1,17 @@
+// UserEmailLoginRequest.java
+package com.leo.airouterbackend.model.dto.email;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+import java.io.Serializable;
+
+@Data
+public class UserEmailLoginRequest implements Serializable {
+    @NotBlank @Email
+    private String email;
+
+    @NotBlank(message = "验证码不能为空")
+    private String code;
+}
