@@ -211,3 +211,34 @@ create table if not exists billing_record
     index idx_requestLogId (requestLogId),
     index idx_userId (userId)
 ) comment '消费账单' collate = utf8mb4_unicode_ci;
+
+-- 图片生成记录表
+create table image_generation_record
+(
+    id            bigint auto_increment comment 'id'
+        primary key,
+    userId        bigint                                   not null comment '用户id',
+    apiKeyId      bigint                                   null comment 'API Key id',
+    modelId       bigint                                   not null comment '使用的模型id',
+    modelKey      varchar(128)                             not null comment '模型标识',
+    prompt        text                                     not null comment '生成提示词',
+    revisedPrompt text                                     null comment '修订后的提示词',
+    imageUrl      varchar(1024)                            null comment '图片URL',
+    imageData     longtext                                 null comment 'Base64图片数据',
+    size          varchar(32)                              null comment '图片尺寸',
+    quality       varchar(32)                              null comment '图片质量',
+    status        varchar(32)    default 'success'         not null comment '状态：success/failed',
+    cost          decimal(12, 4) default 0.0000            not null comment '生成费用（元）',
+    duration      int                                      null comment '耗时（毫秒）',
+    errorMessage  varchar(512)                             null comment '错误信息',
+    clientIp      varchar(128)                             null comment '客户端IP',
+    createTime    datetime       default CURRENT_TIMESTAMP not null comment '创建时间',
+    INDEX idx_userId (userId),
+    INDEX idx_modelId (modelId)
+) comment '图片生成记录' collate = utf8mb4_unicode_ci;
+
+INSERT INTO model (providerId, modelKey, modelName, modelType, description, contextLength, inputPrice, outputPrice, priority, supportReasoning)
+VALUES
+    -- 阶段七：绘图模型
+    (1, 'qwen-image-plus', 'Qwen Image Plus', 'image', '通义万相文生图模型', 0, 0.08, 0, 100, 0);
+#     (2, 'cogview-3-plus', 'CogView-3-Plus', 'image', '智谱AI文生图模型', 0, 0.1, 0, 90, 0);
