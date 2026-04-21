@@ -34,7 +34,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/v1/images")
-@Tag(name = "图片生成")
 @Slf4j
 public class ImageController {
 

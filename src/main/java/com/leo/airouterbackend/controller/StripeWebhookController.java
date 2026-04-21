@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/webhook/stripe")
-@Tag(name = "Stripe Webhook")
 @Slf4j
 public class StripeWebhookController {
 

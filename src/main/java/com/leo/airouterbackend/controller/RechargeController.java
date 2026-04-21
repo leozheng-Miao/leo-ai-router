@@ -34,7 +34,6 @@ import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/recharge")
-@Tag(name = "充值管理")
 @Slf4j
 public class RechargeController {
 

@@ -241,4 +241,30 @@ INSERT INTO model (providerId, modelKey, modelName, modelType, description, cont
 VALUES
     -- 阶段七：绘图模型
     (1, 'qwen-image-plus', 'Qwen Image Plus', 'image', '通义万相文生图模型', 0, 0.08, 0, 100, 0);
+
+-- 插件配置表
+create table if not exists plugin_config
+(
+    id          bigint auto_increment comment 'id' primary key,
+    pluginKey   varchar(64)                           not null comment '插件标识：web_search/pdf_parser/image_recognition',
+    pluginName  varchar(128)                          not null comment '插件名称',
+    pluginType  varchar(32) default 'builtin'         not null comment '插件类型：builtin/custom',
+    description varchar(512)                          null comment '插件描述',
+    config      text                                  null comment '插件配置（JSON）',
+    status      varchar(32) default 'active'          not null comment '状态：active/inactive',
+    priority    int         default 100               not null comment '优先级',
+    createTime  datetime    default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime  datetime    default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete    tinyint     default 0                 not null comment '是否删除',
+    UNIQUE KEY uk_pluginKey (pluginKey)
+) comment '插件配置' collate = utf8mb4_unicode_ci;
+
+-- 初始化插件数据
+-- 注意：Web搜索插件的 API Key 配置在 application-local.yml 中（plugin.serpapi.api-key）
+-- SerpApi 注册地址：https://serpapi.com/
+INSERT INTO plugin_config (pluginKey, pluginName, pluginType, description, config, status, priority)
+VALUES ('web_search', 'Web搜索', 'builtin', '实时联网搜索（SerpApi）', '{"maxResults":5,"searchEngine":"google","timeout":15000}', 'active', 100),
+       ('pdf_parser', 'PDF解析', 'builtin', '解析PDF文档内容，提取文本信息', '{"maxPages":50,"maxTextLength":50000}', 'active', 90),
+       ('image_recognition', '图片识别', 'builtin', '识别图片内容，返回图片描述', '{"model":"qwen-vl-plus","maxImageSize":4194304}', 'active', 80);
+
 #     (2, 'cogview-3-plus', 'CogView-3-Plus', 'image', '智谱AI文生图模型', 0, 0.1, 0, 90, 0);

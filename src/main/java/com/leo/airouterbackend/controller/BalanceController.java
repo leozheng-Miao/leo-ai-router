@@ -28,7 +28,6 @@ import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/balance")
-@Tag(name = "余额管理")
 @Slf4j
 public class BalanceController {
 
