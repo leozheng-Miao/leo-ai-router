@@ -267,4 +267,18 @@ VALUES ('web_search', 'Web搜索', 'builtin', '实时联网搜索（SerpApi）',
        ('pdf_parser', 'PDF解析', 'builtin', '解析PDF文档内容，提取文本信息', '{"maxPages":50,"maxTextLength":50000}', 'active', 90),
        ('image_recognition', '图片识别', 'builtin', '识别图片内容，返回图片描述', '{"model":"qwen-vl-plus","maxImageSize":4194304}', 'active', 80);
 
+
+create table if not exists user_provider_key
+(
+    id           bigint auto_increment comment 'id' primary key,
+    userId       bigint                                 not null comment '用户 ID',
+    providerId   bigint                                 not null comment '提供者 ID',
+    providerName varchar(64)                            not null comment '提供者名称（冗余字段，便于查询）',
+    apiKey       varchar(512)                           not null comment 'API Key（加密存储）',
+    status       varchar(32)  default 'active'          not null comment '状态：active/inactive',
+    createTime   datetime     default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime   datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete     tinyint      default 0                 not null comment '是否删除',
+    KEY uk_user_provider (userId, providerId)
+) comment '用户提供者密钥（BYOK）' collate = utf8mb4_unicode_ci;
 #     (2, 'cogview-3-plus', 'CogView-3-Plus', 'image', '智谱AI文生图模型', 0, 0.1, 0, 90, 0);

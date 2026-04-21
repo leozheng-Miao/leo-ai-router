@@ -10,23 +10,27 @@ import com.leo.airouterbackend.model.dto.chat.ChatResponse;
 import com.leo.airouterbackend.model.dto.chat.StreamChunk;
 import com.leo.airouterbackend.model.dto.chat.StreamResponse;
 import com.leo.airouterbackend.model.dto.log.RequestLogDTO;
+import com.leo.airouterbackend.model.dto.plugin.PluginExecuteRequest;
 import com.leo.airouterbackend.model.entity.Model;
 import com.leo.airouterbackend.model.entity.ModelProvider;
+import com.leo.airouterbackend.model.vo.PluginExecuteVO;
 import com.leo.airouterbackend.service.BalanceService;
 import com.leo.airouterbackend.service.BillingService;
 import com.leo.airouterbackend.service.ChatService;
 import com.leo.airouterbackend.service.ModelInvokeService;
 import com.leo.airouterbackend.service.ModelProviderService;
+import com.leo.airouterbackend.service.PluginService;
 import com.leo.airouterbackend.service.QuotaService;
 import com.leo.airouterbackend.service.RequestLogService;
 import com.leo.airouterbackend.service.RoutingService;
+import com.leo.airouterbackend.service.UserProviderKeyService;
 import com.leo.airouterbackend.service.UserService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -49,6 +53,10 @@ public class ChatServiceImpl implements ChatService {
     private BillingService billingService;
     @Resource
     private UserService userService;
+    @Resource
+    private UserProviderKeyService userProviderKeyService;
+    @Resource
+    private PluginService pluginService;
     /**
      * 最大 Fallback 重试次数
      */
@@ -78,10 +86,43 @@ public class ChatServiceImpl implements ChatService {
             }
         }
 
+        // 如果指定了插件，先执行插件获取上下文，然后注入到消息中
+        if (StrUtil.isNotBlank(chatRequest.getPluginKey())) {
+            chatRequest = injectPluginContext(chatRequest, userId);
+        }
+
         String strategyType = determineStrategyType(chatRequest.getRoutingStrategy(), requestModel);
 
         Model selectModel = routingService.selectModel(strategyType, "chat", requestModel);
         if (selectModel == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型");
+
+        // 检查用户是否配置了 BYOK（提前检查，避免不必要的余额检查）
+        boolean willUseByok = false;
+        if (userId != null) {
+            willUseByok = userProviderKeyService.hasUserProviderKey(userId, selectModel.getProviderId());
+        }
+
+        // BYOK 模式下不检查配额和余额
+        if (!willUseByok) {
+            // 检查用户配额
+            if (userId != null && !quotaService.checkQuota(userId)) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额");
+            }
+
+            // 检查用户余额（预估检查，实际扣减在调用成功后）
+            if (userId != null) {
+                java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
+                if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                            "账户余额不足，当前余额：¥" + currentBalance + "，请先充值");
+                }
+            }
+        } else {
+            log.info("BYOK 模式：用户 {} 跳过余额和配额检查", userId);
+        }
+
+        //TODO: 从缓存获取相应
+
         List<Model> fallbackModels = routingService.getFallbackModels(strategyType, "chat", requestModel);
         boolean isFallback = false;
 
@@ -158,6 +199,27 @@ public class ChatServiceImpl implements ChatService {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型提供者不存在");
         }
 
+        // 检查用户是否配置了 BYOK（用户自带密钥）
+        boolean isByok = false;
+        if (userId != null) {
+            String userApiKey = userProviderKeyService.getUserProviderApiKey(userId, model.getProviderId());
+            if (userApiKey != null) {
+                // 使用用户自己的密钥（BYOK 模式）
+                provider = ModelProvider.builder()
+                        .id(provider.getId())
+                        .providerName(provider.getProviderName())
+                        .displayName(provider.getDisplayName())
+                        .baseUrl(provider.getBaseUrl())
+                        // 使用用户的密钥
+                        .apiKey(userApiKey)
+                        .status(provider.getStatus())
+                        .priority(provider.getPriority())
+                        .build();
+                isByok = true;
+                log.info("用户 {} 使用 BYOK 模式调用模型 {}", userId, model.getModelKey());
+            }
+        }
+
         try {
             // 调用模型
             org.springframework.ai.chat.model.ChatResponse aiResponse =
@@ -189,7 +251,7 @@ public class ChatServiceImpl implements ChatService {
                     .build());
 
             // 扣减用户配额和余额
-            if (userId != null && totalTokens > 0) {
+            if (userId != null && totalTokens > 0 && !isByok) {
                 quotaService.deductTokens(userId, totalTokens);
 
                 // 计算费用并扣减余额
@@ -206,7 +268,11 @@ public class ChatServiceImpl implements ChatService {
                             : "网页调用消费 - " + model.getModelKey();
                     balanceService.deductBalance(userId, cost, null, description);
                 }
+            } else if (isByok) {
+                log.info("BYOK 模式：用户 {} 使用自己的密钥，不扣减余额和配额", userId);
             }
+
+            //TODO: 缓存响应
 
             return response;
         } catch (Exception e) {
@@ -281,6 +347,45 @@ public class ChatServiceImpl implements ChatService {
             ModelProvider provider = modelProviderService.getById(selectedModel.getProviderId());
             if (provider == null) {
                 return Flux.error(new BusinessException(ErrorCode.PARAMS_ERROR, "模型提供者不存在"));
+            }
+
+            // 检查用户是否配置了 BYOK（用户自带密钥）
+            final boolean[] isByok = {false};
+            if (userId != null) {
+                String userApiKey = userProviderKeyService.getUserProviderApiKey(userId, selectedModel.getProviderId());
+                if (userApiKey != null) {
+                    // 使用用户自己的密钥（BYOK 模式）
+                    provider = ModelProvider.builder()
+                            .id(provider.getId())
+                            .providerName(provider.getProviderName())
+                            .displayName(provider.getDisplayName())
+                            .baseUrl(provider.getBaseUrl())
+                            .apiKey(userApiKey)  // 使用用户的密钥
+                            .status(provider.getStatus())
+                            .priority(provider.getPriority())
+                            .build();
+                    isByok[0] = true;
+                    log.info("用户 {} 使用 BYOK 模式调用流式模型 {}", userId, selectedModel.getModelKey());
+                }
+            }
+
+            // BYOK 模式下不检查配额和余额
+            if (!isByok[0]) {
+                // 检查用户配额
+                if (userId != null && !quotaService.checkQuota(userId)) {
+                    return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额"));
+                }
+
+                // 检查用户余额（预估检查）
+                if (userId != null) {
+                    java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
+                    if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                        return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR,
+                                "账户余额不足，当前余额：¥" + currentBalance + "，请先充值"));
+                    }
+                }
+            } else {
+                log.info("BYOK 模式：跳过余额和配额检查");
             }
 
             // 调用流式模型，获取统一格式的响应块
@@ -374,7 +479,7 @@ public class ChatServiceImpl implements ChatService {
                                 .userAgent(userAgent)
                                 .build());
                         // 扣减用户配额和余额
-                        if (userId != null && totalTokens > 0) {
+                        if (userId != null && totalTokens > 0 && !isByok[0]) {
                             quotaService.deductTokens(userId, totalTokens);
 
                             // 计算费用并扣减余额
@@ -391,6 +496,8 @@ public class ChatServiceImpl implements ChatService {
                                         : "网页调用消费（流式） - " + selectedModel.getModelKey();
                                 balanceService.deductBalance(userId, cost, null, description);
                             }
+                        } else if (isByok[0]) {
+                            log.info("BYOK 模式（流式）：用户 {} 使用自己的密钥，不扣减余额和配额", userId);
                         }
                     }).doOnError(error -> {
                         // 流错误时记录日志
@@ -471,5 +578,102 @@ public class ChatServiceImpl implements ChatService {
         }
         // 默认使用自动路由策略
         return "auto";
+    }
+
+    /**
+     * 执行插件并将结果注入到对话消息中
+     *
+     * @param chatRequest 原始请求
+     * @param userId      用户ID
+     * @return 注入插件上下文后的请求
+     */
+    private ChatRequest injectPluginContext(ChatRequest chatRequest, Long userId) {
+        String pluginKey = chatRequest.getPluginKey();
+        log.info("执行插件并注入上下文: {}", pluginKey);
+
+        // 获取用户的最后一条消息作为 input
+        String userInput = "";
+        List<ChatMessage> messages = chatRequest.getMessages();
+        if (messages != null && !messages.isEmpty()) {
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                ChatMessage msg = messages.get(i);
+                if ("user".equals(msg.getRole())) {
+                    userInput = msg.getContent();
+                    break;
+                }
+            }
+        }
+
+        // 构建插件执行请求
+        PluginExecuteRequest pluginRequest = new PluginExecuteRequest();
+        pluginRequest.setPluginKey(pluginKey);
+        pluginRequest.setInput(userInput);
+        pluginRequest.setFileUrl(chatRequest.getFileUrl());
+        pluginRequest.setFileBytes(chatRequest.getFileBytes());
+        pluginRequest.setFileType(chatRequest.getFileType());
+
+        // 执行插件
+        PluginExecuteVO pluginResult = pluginService.executePlugin(pluginRequest, userId);
+
+        if (!pluginResult.isSuccess()) {
+            log.warn("插件执行失败: {}", pluginResult.getErrorMessage());
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "插件执行失败: " + pluginResult.getErrorMessage());
+        }
+
+        // 构建插件上下文的 system message
+        String pluginContext = buildPluginContextMessage(pluginKey, pluginResult.getContent());
+
+        // 创建新的消息列表，将插件上下文作为 system message 注入
+        List<ChatMessage> newMessages = new ArrayList<>();
+
+        // 添加插件上下文作为 system message
+        newMessages.add(new ChatMessage("system", pluginContext));
+
+        // 添加原始消息
+        if (messages != null) {
+            newMessages.addAll(messages);
+        }
+
+        // 更新请求的消息列表
+        chatRequest.setMessages(newMessages);
+
+        log.info("插件上下文注入完成，新增 system message");
+        return chatRequest;
+    }
+
+    /**
+     * 根据插件类型构建上下文消息
+     */
+    private String buildPluginContextMessage(String pluginKey, String content) {
+        return switch (pluginKey) {
+            case "web_search" -> String.format("""
+                    以下是实时网络搜索的结果，请根据这些信息回答用户的问题：
+                    
+                    %s
+                    
+                    请基于以上搜索结果，准确、简洁地回答用户的问题。如果搜索结果中没有相关信息，请如实告知。
+                    """, content);
+            case "pdf_parser" -> String.format("""
+                    以下是用户上传的 PDF 文档内容：
+                    
+                    %s
+                    
+                    请基于以上文档内容，回答用户的问题。如果问题与文档内容无关，请如实告知。
+                    """, content);
+            case "image_recognition" -> String.format("""
+                    以下是用户上传图片的识别结果：
+                    
+                    %s
+                    
+                    请基于以上图片识别结果，回答用户的问题。
+                    """, content);
+            default -> String.format("""
+                    以下是插件返回的额外信息：
+                    
+                    %s
+                    
+                    请基于以上信息回答用户的问题。
+                    """, content);
+        };
     }
 }
