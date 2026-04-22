@@ -71,6 +71,13 @@
                   </div>
                 </a-menu-item>
                 <a-menu-divider />
+                <a-menu-item key="keys">
+                  <RouterLink to="/keys" style="color: #374151; text-decoration: none">
+                    <KeyOutlined /> API Keys
+                  </RouterLink>
+                </a-menu-item>
+                <a-menu-divider />
+
                 <a-menu-item key="logout" @click="handleLogout">
                   <LogoutOutlined /> 退出登录
                 </a-menu-item>
@@ -92,7 +99,7 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { DownOutlined, LogoutOutlined, FileTextOutlined } from '@ant-design/icons-vue'
+import { DownOutlined, LogoutOutlined, FileTextOutlined, KeyOutlined } from '@ant-design/icons-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { userLogout } from '@/api/userController'
 
@@ -103,6 +110,7 @@ const loginUserStore = useLoginUserStore()
 const navItems = [
   { label: '首页', path: '/' },
   { label: '模型广场', path: '/models' },
+  { label: '在线对话', path: '/chat' },
   { label: '价格', path: '/pricing' },
 ]
 

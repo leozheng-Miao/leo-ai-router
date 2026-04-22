@@ -19,8 +19,17 @@ const router = createRouter({
       name: 'userRegister',
       component: () => import('@/pages/user/UserRegisterPage.vue'),
     },
+    {
+      path: '/keys',
+      name: 'apiKeys',
+      component: () => import('@/pages/user/ApiKeyPage.vue'),
+    },
+    {
+      path: '/chat',
+      name: 'chat',
+      component: () => import('@/pages/chat/ChatPage.vue'),
+    },
   ],
 })
-
 
 export default router

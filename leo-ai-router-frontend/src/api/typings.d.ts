@@ -55,6 +55,24 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseListModelVO = {
+    code?: number
+    data?: ModelVO[]
+    message?: string
+  }
+
+  type BaseResponseListPluginConfigVO = {
+    code?: number
+    data?: PluginConfigVO[]
+    message?: string
+  }
+
+  type BaseResponseListUserProviderKeyVO = {
+    code?: number
+    data?: UserProviderKeyVO[]
+    message?: string
+  }
+
   type BaseResponseLoginUserVO = {
     code?: number
     data?: LoginUserVO
@@ -67,6 +85,12 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseModelVO = {
+    code?: number
+    data?: ModelVO
+    message?: string
+  }
+
   type BaseResponsePageApiKeyVO = {
     code?: number
     data?: PageApiKeyVO
@@ -76,6 +100,18 @@ declare namespace API {
   type BaseResponsePageBillingRecord = {
     code?: number
     data?: PageBillingRecord
+    message?: string
+  }
+
+  type BaseResponsePageImageGenerationRecord = {
+    code?: number
+    data?: PageImageGenerationRecord
+    message?: string
+  }
+
+  type BaseResponsePageModelVO = {
+    code?: number
+    data?: PageModelVO
     message?: string
   }
 
@@ -94,6 +130,18 @@ declare namespace API {
   type BaseResponsePageUserVO = {
     code?: number
     data?: PageUserVO
+    message?: string
+  }
+
+  type BaseResponsePluginConfigVO = {
+    code?: number
+    data?: PluginConfigVO
+    message?: string
+  }
+
+  type BaseResponsePluginExecuteVO = {
+    code?: number
+    data?: PluginExecuteVO
     message?: string
   }
 
@@ -202,8 +250,16 @@ declare namespace API {
     id?: number
   }
 
+  type disablePluginParams = {
+    pluginKey: string
+  }
+
   type disableUserParams = {
     userId: number
+  }
+
+  type enablePluginParams = {
+    pluginKey: string
   }
 
   type enableUserParams = {
@@ -211,6 +267,10 @@ declare namespace API {
   }
 
   type getHistoryDetailParams = {
+    id: number
+  }
+
+  type getModelVOByIdParams = {
     id: number
   }
 
@@ -229,6 +289,15 @@ declare namespace API {
     pageSize?: number
   }
 
+  type getMyRecordsParams = {
+    pageNum?: number
+    pageSize?: number
+  }
+
+  type getPluginParams = {
+    pluginKey: string
+  }
+
   type getUserAnalysisParams = {
     userId: number
   }
@@ -239,6 +308,55 @@ declare namespace API {
 
   type getUserVOByIdParams = {
     id: number
+  }
+
+  type ImageData = {
+    url?: string
+    b64Json?: string
+    revisedPrompt?: string
+  }
+
+  type ImageGenerationRecord = {
+    id?: number
+    userId?: number
+    apiKeyId?: number
+    modelId?: number
+    modelKey?: string
+    prompt?: string
+    revisedPrompt?: string
+    imageUrl?: string
+    imageData?: string
+    size?: string
+    quality?: string
+    status?: string
+    cost?: number
+    duration?: number
+    errorMessage?: string
+    clientIp?: string
+    createTime?: string
+  }
+
+  type ImageGenerationRequest = {
+    prompt?: string
+    model?: string
+    size?: string
+    quality?: string
+    user?: string
+    n?: number
+    response_format?: string
+  }
+
+  type ImageGenerationResponse = {
+    created?: number
+    data?: ImageData[]
+  }
+
+  type listActiveModelsByProviderParams = {
+    providerId: number
+  }
+
+  type listActiveModelsByTypeParams = {
+    modelType: string
   }
 
   type listMyApiKeysParams = {
@@ -264,6 +382,69 @@ declare namespace API {
     balance?: number
   }
 
+  type ModelAddRequest = {
+    providerId?: number
+    modelKey?: string
+    modelName?: string
+    modelType?: string
+    description?: string
+    contextLength?: number
+    inputPrice?: number
+    outputPrice?: number
+    priority?: number
+    defaultTimeout?: number
+    capabilities?: string
+  }
+
+  type ModelQueryRequest = {
+    pageNum?: number
+    pageSize?: number
+    sortField?: string
+    sortOrder?: string
+    providerId?: number
+    modelKey?: string
+    modelName?: string
+    modelType?: string
+    status?: string
+  }
+
+  type ModelUpdateRequest = {
+    id?: number
+    modelName?: string
+    description?: string
+    contextLength?: number
+    inputPrice?: number
+    outputPrice?: number
+    status?: string
+    priority?: number
+    defaultTimeout?: number
+    capabilities?: string
+  }
+
+  type ModelVO = {
+    id?: number
+    providerId?: number
+    providerName?: string
+    providerDisplayName?: string
+    modelKey?: string
+    modelName?: string
+    modelType?: string
+    description?: string
+    contextLength?: number
+    inputPrice?: number
+    outputPrice?: number
+    status?: string
+    healthStatus?: string
+    avgLatency?: number
+    successRate?: number
+    priority?: number
+    defaultTimeout?: number
+    supportReasoning?: number
+    capabilities?: string
+    createTime?: string
+    updateTime?: string
+  }
+
   type PageApiKeyVO = {
     records?: ApiKeyVO[]
     pageNumber?: number
@@ -275,6 +456,24 @@ declare namespace API {
 
   type PageBillingRecord = {
     records?: BillingRecord[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
+  type PageImageGenerationRecord = {
+    records?: ImageGenerationRecord[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
+  type PageModelVO = {
+    records?: ModelVO[]
     pageNumber?: number
     pageSize?: number
     totalPage?: number
@@ -309,6 +508,46 @@ declare namespace API {
     optimizeCountQuery?: boolean
   }
 
+  type PluginConfigVO = {
+    id?: number
+    pluginKey?: string
+    pluginName?: string
+    pluginType?: string
+    description?: string
+    config?: string
+    status?: string
+    priority?: number
+    createTime?: string
+    updateTime?: string
+  }
+
+  type PluginExecuteRequest = {
+    pluginKey?: string
+    input?: string
+    fileUrl?: string
+    fileType?: string
+    params?: Record<string, any>
+    fileBytes?: string[]
+  }
+
+  type PluginExecuteVO = {
+    success?: boolean
+    pluginKey?: string
+    content?: string
+    errorMessage?: string
+    duration?: number
+    data?: Record<string, any>
+  }
+
+  type PluginUpdateRequest = {
+    id?: number
+    pluginName?: string
+    description?: string
+    config?: string
+    status?: string
+    priority?: number
+  }
+
   type QuotaUpdateRequest = {
     userId?: number
     tokenQuota?: number
@@ -330,6 +569,10 @@ declare namespace API {
     description?: string
     createTime?: string
     updateTime?: string
+  }
+
+  type reloadPluginParams = {
+    pluginKey: string
   }
 
   type RequestLog = {
@@ -450,6 +693,27 @@ declare namespace API {
   type UserLoginRequest = {
     userAccount?: string
     userPassword?: string
+  }
+
+  type UserProviderKeyAddRequest = {
+    providerId?: number
+    apiKey?: string
+  }
+
+  type UserProviderKeyUpdateRequest = {
+    id?: number
+    apiKey?: string
+    status?: string
+  }
+
+  type UserProviderKeyVO = {
+    id?: number
+    providerId?: number
+    providerName?: string
+    apiKey?: string
+    status?: string
+    createTime?: string
+    updateTime?: string
   }
 
   type UserQueryRequest = {
