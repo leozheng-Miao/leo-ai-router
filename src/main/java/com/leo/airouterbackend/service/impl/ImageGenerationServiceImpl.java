@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
 import com.leo.airouterbackend.mapper.ImageGenerationRecordMapper;
+import com.leo.airouterbackend.matrics.AIMetricsCollector;
 import com.leo.airouterbackend.model.dto.image.ImageGenerationRequest;
 import com.leo.airouterbackend.model.dto.image.ImageGenerationResponse;
 import com.leo.airouterbackend.model.entity.ImageGenerationRecord;
@@ -59,6 +60,9 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
 
     @Resource
     private BillingService billingService;
+
+    @Resource
+    private AIMetricsCollector aiMetricsCollector;
 
     @Resource
     private UserService userService;
@@ -141,6 +145,10 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
                             : "网页生成 " + modelKey + " 生成 " + actualImageCount + " 张图片";
                     balanceService.deductBalance(userId, actualCost, null, description);
                 }
+                // 收集监控指标
+                aiMetricsCollector.recordRequest(model.getModelKey(), userId, apiKeyId != null ? apiKeyId.toString() : null);
+                aiMetricsCollector.recordTokens(model.getModelKey(), totalTokens);
+                aiMetricsCollector.recordResponseTime(model.getModelKey(), duration);
             }
             log.info("图片生成成功： 用户 {}, 模型 {}, 数量 {}, 生成时间 {}ms", userId, modelKey, actualImageCount, duration);
             return response;

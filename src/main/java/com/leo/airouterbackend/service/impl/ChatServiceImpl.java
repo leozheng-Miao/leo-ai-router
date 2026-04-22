@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
+import com.leo.airouterbackend.matrics.AIMetricsCollector;
 import com.leo.airouterbackend.model.dto.chat.ChatMessage;
 import com.leo.airouterbackend.model.dto.chat.ChatRequest;
 import com.leo.airouterbackend.model.dto.chat.ChatResponse;
@@ -57,6 +58,8 @@ public class ChatServiceImpl implements ChatService {
     private UserProviderKeyService userProviderKeyService;
     @Resource
     private PluginService pluginService;
+    @Resource
+    private AIMetricsCollector aiMetricsCollector;
     /**
      * 最大 Fallback 重试次数
      */
@@ -230,6 +233,8 @@ public class ChatServiceImpl implements ChatService {
 
             // 记录请求日志
             long duration = System.currentTimeMillis() - startTime;
+            int promptTokens = response.getUsage().getPromptTokens();
+            int completionTokens = response.getUsage().getCompletionTokens();
             int totalTokens = response.getUsage().getTotalTokens();
             requestLogService.logRequest(RequestLogDTO.builder()
                     .traceId(traceId)
@@ -249,7 +254,10 @@ public class ChatServiceImpl implements ChatService {
                     .clientIp(clientIp)
                     .userAgent(userAgent)
                     .build());
-
+            // 收集监控指标
+            aiMetricsCollector.recordRequest(model.getModelKey(), userId, apiKeyId != null ? apiKeyId.toString() : null);
+            aiMetricsCollector.recordTokens(model.getModelKey(), totalTokens);
+            aiMetricsCollector.recordResponseTime(model.getModelKey(), duration);
             // 扣减用户配额和余额
             if (userId != null && totalTokens > 0 && !isByok) {
                 quotaService.deductTokens(userId, totalTokens);
@@ -271,6 +279,7 @@ public class ChatServiceImpl implements ChatService {
             } else if (isByok) {
                 log.info("BYOK 模式：用户 {} 使用自己的密钥，不扣减余额和配额", userId);
             }
+
 
             //TODO: 缓存响应
 
@@ -295,6 +304,7 @@ public class ChatServiceImpl implements ChatService {
                     .clientIp(clientIp)
                     .userAgent(userAgent)
                     .build());
+            aiMetricsCollector.recordError(model.getModelKey(), "MODEL_ERROR");
             throw e;
         }
     }
@@ -478,6 +488,12 @@ public class ChatServiceImpl implements ChatService {
                                 .clientIp(clientIp)
                                 .userAgent(userAgent)
                                 .build());
+
+                        // 收集监控指标
+                        aiMetricsCollector.recordRequest(selectedModel.getModelKey(), userId, apiKeyId != null ? apiKeyId.toString() : null);
+                        aiMetricsCollector.recordTokens(selectedModel.getModelKey(), totalTokens);
+                        aiMetricsCollector.recordResponseTime(selectedModel.getModelKey(), duration);
+
                         // 扣减用户配额和余额
                         if (userId != null && totalTokens > 0 && !isByok[0]) {
                             quotaService.deductTokens(userId, totalTokens);
