@@ -67,6 +67,12 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseListProviderVO = {
+    code?: number
+    data?: ProviderVO[]
+    message?: string
+  }
+
   type BaseResponseListUserProviderKeyVO = {
     code?: number
     data?: UserProviderKeyVO[]
@@ -115,6 +121,12 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponsePageProviderVO = {
+    code?: number
+    data?: PageProviderVO
+    message?: string
+  }
+
   type BaseResponsePageRechargeRecord = {
     code?: number
     data?: PageRechargeRecord
@@ -136,6 +148,12 @@ declare namespace API {
   type BaseResponsePluginConfigVO = {
     code?: number
     data?: PluginConfigVO
+    message?: string
+  }
+
+  type BaseResponseProviderVO = {
+    code?: number
+    data?: ProviderVO
     message?: string
   }
 
@@ -391,9 +409,11 @@ declare namespace API {
     contextLength?: number
     inputPrice?: number
     outputPrice?: number
+    status?: string
     priority?: number
     defaultTimeout?: number
     capabilities?: string
+    supportReasoning?: number
   }
 
   type ModelQueryRequest = {
@@ -410,7 +430,10 @@ declare namespace API {
 
   type ModelUpdateRequest = {
     id?: number
+    providerId?: number
+    modelKey?: string
     modelName?: string
+    modelType?: string
     description?: string
     contextLength?: number
     inputPrice?: number
@@ -419,6 +442,7 @@ declare namespace API {
     priority?: number
     defaultTimeout?: number
     capabilities?: string
+    supportReasoning?: number
   }
 
   type ModelVO = {
@@ -441,6 +465,52 @@ declare namespace API {
     defaultTimeout?: number
     supportReasoning?: number
     capabilities?: string
+    createTime?: string
+    updateTime?: string
+  }
+
+  type ProviderAddRequest = {
+    providerName?: string
+    displayName?: string
+    baseUrl?: string
+    apiKey?: string
+    status?: string
+    priority?: number
+    config?: string
+  }
+
+  type ProviderQueryRequest = {
+    pageNum?: number
+    pageSize?: number
+    sortField?: string
+    sortOrder?: string
+    providerName?: string
+    displayName?: string
+    status?: string
+    healthStatus?: string
+  }
+
+  type ProviderUpdateRequest = {
+    id?: number
+    displayName?: string
+    baseUrl?: string
+    apiKey?: string
+    status?: string
+    priority?: number
+    config?: string
+  }
+
+  type ProviderVO = {
+    id?: number
+    providerName?: string
+    displayName?: string
+    baseUrl?: string
+    status?: string
+    healthStatus?: string
+    avgLatency?: number
+    successRate?: number
+    priority?: number
+    config?: string
     createTime?: string
     updateTime?: string
   }
@@ -474,6 +544,15 @@ declare namespace API {
 
   type PageModelVO = {
     records?: ModelVO[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
+  type PageProviderVO = {
+    records?: ProviderVO[]
     pageNumber?: number
     pageSize?: number
     totalPage?: number

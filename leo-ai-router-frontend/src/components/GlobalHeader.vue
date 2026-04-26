@@ -109,9 +109,9 @@ const loginUserStore = useLoginUserStore()
 
 const navItems = [
   { label: '首页', path: '/' },
-  { label: '模型广场', path: '/models' },
+  { label: '提供者管理', path: '/providers' },
+  { label: '模型管理', path: '/models' },
   { label: '在线对话', path: '/chat' },
-  { label: '价格', path: '/pricing' },
 ]
 
 const isActive = (path: string) => (path === '/' ? route.path === '/' : route.path.startsWith(path))

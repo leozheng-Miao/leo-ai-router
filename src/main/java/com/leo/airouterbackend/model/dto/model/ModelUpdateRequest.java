@@ -22,9 +22,24 @@ public class ModelUpdateRequest implements Serializable {
     private Long id;
 
     /**
+     * 提供者id
+     */
+    private Long providerId;
+
+    /**
+     * 模型标识
+     */
+    private String modelKey;
+
+    /**
      * 模型显示名称
      */
     private String modelName;
+
+    /**
+     * 模型类型
+     */
+    private String modelType;
 
     /**
      * 模型描述
@@ -65,4 +80,9 @@ public class ModelUpdateRequest implements Serializable {
      * 能力标签（JSON数组）
      */
     private String capabilities;
+
+    /**
+     * 是否支持深度思考：0=不支持，1=支持
+     */
+    private Integer supportReasoning;
 }

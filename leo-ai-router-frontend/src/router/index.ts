@@ -25,6 +25,16 @@ const router = createRouter({
       component: () => import('@/pages/user/ApiKeyPage.vue'),
     },
     {
+      path: '/providers',
+      name: 'providers',
+      component: () => import('@/pages/admin/ProviderManagementPage.vue'),
+    },
+    {
+      path: '/models',
+      name: 'models',
+      component: () => import('@/pages/admin/ModelManagementPage.vue'),
+    },
+    {
       path: '/chat',
       name: 'chat',
       component: () => import('@/pages/chat/ChatPage.vue'),

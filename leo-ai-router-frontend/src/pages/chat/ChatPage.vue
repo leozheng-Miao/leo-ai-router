@@ -3,41 +3,24 @@
     <!-- 左侧配置栏 -->
     <div class="chat-sidebar">
       <div class="sidebar-section">
-        <div class="sidebar-label">选择模型</div>
-        <a-select
-          v-model:value="selectedModel"
-          placeholder="请选择模型"
-          class="sidebar-select"
-          :loading="modelsLoading"
-        >
-          <a-select-option v-for="m in models" :key="m.value" :value="m.value">
-            <div class="model-option">
-              <span class="model-opt-name">{{ m.label }}</span>
-              <a-tag :color="m.tagColor" class="model-opt-tag">{{ m.provider }}</a-tag>
-            </div>
-          </a-select-option>
-        </a-select>
+        <div class="sidebar-label">当前会话配置</div>
+        <div class="session-card">
+          <div class="session-line">
+            <span>路由策略</span>
+            <a-tag color="blue">{{ currentStrategyLabel }}</a-tag>
+          </div>
+          <div class="session-line">
+            <span>选中模型</span>
+            <span class="session-value">{{ selectedModelLabel }}</span>
+          </div>
+          <div class="session-line">
+            <span>深度思考</span>
+            <a-tag :color="enableReasoning ? 'purple' : 'default'">
+              {{ enableReasoning ? '已开启' : '已关闭' }}
+            </a-tag>
+          </div>
+        </div>
       </div>
-
-      <div class="sidebar-section">
-        <div class="sidebar-label">选择 API Key</div>
-        <a-select
-          v-model:value="selectedApiKey"
-          placeholder="网页端聊天无需选择，可选"
-          class="sidebar-select"
-          :loading="keysLoading"
-          allow-clear
-        >
-          <a-select-option v-for="k in apiKeys" :key="k.id" :value="k.id">
-            <div class="key-option">
-              <KeyOutlined class="key-opt-icon" />
-              <span class="key-opt-name">{{ k.keyName || '未命名' }}</span>
-            </div>
-          </a-select-option>
-        </a-select>
-      </div>
-
-      <a-divider style="margin: 8px 0" />
 
       <!-- Token 统计 -->
       <div class="sidebar-section">
@@ -79,7 +62,7 @@
             <MessageOutlined />
           </div>
           <div class="empty-title">开始一段对话</div>
-          <div class="empty-desc">选择模型后即可开始流式对话，API Key 仅供查看</div>
+          <div class="empty-desc">选择策略与模型后即可开始流式对话，API Key 仅供查看</div>
           <div class="quick-tips">
             <div v-for="tip in quickTips" :key="tip" class="quick-tip" @click="fillTip(tip)">
               {{ tip }}
@@ -105,8 +88,11 @@
             <div class="msg-bubble" :class="msg.role === 'user' ? 'bubble-user' : 'bubble-ai'">
               <!-- AI 消息的推理内容 -->
               <div v-if="msg.reasoning && msg.role === 'assistant'" class="reasoning-block">
-                <div class="reasoning-title"><BulbOutlined /> 思考过程</div>
-                <div class="reasoning-content">{{ msg.reasoning }}</div>
+                <button class="reasoning-toggle" type="button" @click="toggleReasoning(idx)">
+                  <span class="reasoning-title"><BulbOutlined /> 思考过程</span>
+                  <span class="reasoning-action">{{ msg.reasoningExpanded ? '收起' : '展开' }}</span>
+                </button>
+                <div v-if="msg.reasoningExpanded" class="reasoning-content">{{ msg.reasoning }}</div>
               </div>
 
               <!-- 消息内容 -->
@@ -142,6 +128,28 @@
 
       <!-- 输入区 -->
       <div class="input-area">
+        <div class="composer-toolbar">
+          <div class="toolbar-left">
+            <a-segmented
+              v-model:value="selectedRoutingStrategy"
+              :options="routingStrategyOptions"
+              size="large"
+            />
+            <a-button class="model-trigger" @click="modelModalOpen = true">
+              {{ selectedRoutingStrategy === 'fixed' ? `模型：${selectedModelLabel}` : `候选：${selectedModelLabel}` }}
+            </a-button>
+            <div class="reasoning-switch">
+              <span class="reasoning-switch__label">深度思考</span>
+              <a-switch v-model:checked="enableReasoning" />
+            </div>
+            <span v-if="reasoningModelWarning" class="reasoning-warning-chip">
+              {{ reasoningModelWarning }}
+            </span>
+          </div>
+          <div class="toolbar-right">
+            <span class="toolbar-tip">策略会直接透传给后端路由</span>
+          </div>
+        </div>
         <div class="input-wrap">
           <a-textarea
             v-model:value="inputText"
@@ -157,7 +165,7 @@
               type="primary"
               class="send-btn"
               :loading="isStreaming"
-              :disabled="!inputText.trim() || !selectedModel"
+              :disabled="!canSendMessage"
               @click="sendMessage"
             >
               <SendOutlined v-if="!isStreaming" />
@@ -166,25 +174,56 @@
           </div>
         </div>
         <div class="input-hint">
-          <span v-if="!selectedModel" class="hint-warn"
-            ><ExclamationCircleOutlined /> 请先选择模型</span
+          <span v-if="selectedRoutingStrategy === 'fixed' && !selectedModel" class="hint-warn"
+            ><ExclamationCircleOutlined /> 固定模型策略下请先选择模型</span
           >
-          <span v-else-if="!selectedApiKey" class="hint-ok"
-            ><CheckCircleOutlined /> 当前使用网页端登录态聊天，API Key 可不选</span
+          <span v-else-if="reasoningModelWarning" class="hint-warn"
+            ><ExclamationCircleOutlined /> {{ reasoningModelWarning }}</span
           >
-          <span v-else class="hint-ok"><CheckCircleOutlined /> 准备就绪，可以发送</span>
+          <span v-else class="hint-ok"
+            ><CheckCircleOutlined /> 当前使用网页端登录态聊天，{{ currentStrategyLabel }}已就绪</span
+          >
         </div>
       </div>
     </div>
+
+    <a-modal v-model:open="modelModalOpen" title="选择模型" width="880px" :footer="null">
+      <a-tabs v-model:activeKey="activeModelTab">
+        <a-tab-pane key="all" tab="全部模型" />
+        <a-tab-pane key="fast" tab="快速模型" />
+        <a-tab-pane key="reasoning" tab="深度思考" />
+      </a-tabs>
+      <div class="model-grid">
+        <button
+          v-for="model in displayedModels"
+          :key="model.value"
+          type="button"
+          class="model-card"
+          :class="{ 'model-card--active': selectedModel === model.value }"
+          @click="selectModel(model.value)"
+        >
+          <div class="model-card__head">
+            <span class="model-card__title">{{ model.label }}</span>
+            <a-tag :color="model.tagColor">{{ model.provider }}</a-tag>
+          </div>
+          <div class="model-card__meta">
+            <span>{{ model.fastLabel }}</span>
+            <span>{{ model.reasoningLabel }}</span>
+          </div>
+          <div class="model-card__desc">
+            {{ model.description || `类型：${model.modelType || 'chat'}` }}
+          </div>
+        </button>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, ref, reactive, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { message as antMessage } from 'ant-design-vue'
 import { marked } from 'marked'
 import {
-  KeyOutlined,
   DeleteOutlined,
   MessageOutlined,
   UserOutlined,
@@ -195,7 +234,6 @@ import {
   ExclamationCircleOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons-vue'
-import { listMyApiKeys } from '@/api/apiKeyController'
 import { listActiveModels } from '@/api/modelController'
 
 const API_BASE_URL = 'http://localhost:8123/api'
@@ -207,6 +245,7 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   reasoning?: string
+  reasoningExpanded?: boolean
   time: string
   tokens?: number
   streaming?: boolean
@@ -217,6 +256,13 @@ interface ModelOption {
   value: string
   provider: string
   tagColor: string
+  description?: string
+  supportReasoning?: number
+  avgLatency?: number
+  modelType?: string
+  capabilities?: string
+  fastLabel: string
+  reasoningLabel: string
 }
 
 interface StreamChunkChoice {
@@ -240,7 +286,8 @@ interface BusinessResponse<T = unknown> {
 
 interface StoredChatSession {
   selectedModel?: string
-  selectedApiKey?: number
+  selectedRoutingStrategy?: string
+  enableReasoning?: boolean
   inputText: string
   messages: ChatMessage[]
 }
@@ -260,7 +307,8 @@ const providerColorMap: Record<string, string> = {
 
 // ───── 状态 ─────
 const selectedModel = ref<string | undefined>(undefined)
-const selectedApiKey = ref<number | undefined>(undefined)
+const selectedRoutingStrategy = ref<'auto' | 'cost_first' | 'latency_first' | 'fixed'>('auto')
+const enableReasoning = ref(false)
 const inputText = ref('')
 const messages = ref<ChatMessage[]>([])
 const isStreaming = ref(false)
@@ -268,16 +316,76 @@ const streamingContent = ref('')
 const streamingReasoning = ref('')
 const messageListRef = ref<HTMLDivElement | null>(null)
 const sendDebounceTimer = ref<number | null>(null)
+const modelModalOpen = ref(false)
+const activeModelTab = ref<'all' | 'fast' | 'reasoning'>('all')
 
 const modelsLoading = ref(false)
-const keysLoading = ref(false)
-
 const models = ref<ModelOption[]>([])
-const apiKeys = ref<API.ApiKeyVO[]>([])
 
 const sessionStats = reactive({
   totalMessages: 0,
   totalTokens: 0,
+})
+
+const routingStrategyOptions = [
+  { label: '自动路由', value: 'auto' },
+  { label: '成本优先', value: 'cost_first' },
+  { label: '速度优先', value: 'latency_first' },
+  { label: '固定模型', value: 'fixed' },
+]
+
+const currentStrategyLabel = computed(() => {
+  return routingStrategyOptions.find((item) => item.value === selectedRoutingStrategy.value)?.label ?? '自动路由'
+})
+
+const selectedModelLabel = computed(() => {
+  if (!selectedModel.value) {
+    return selectedRoutingStrategy.value === 'fixed' ? '未选择' : '由路由自动挑选'
+  }
+  return models.value.find((item) => item.value === selectedModel.value)?.label ?? selectedModel.value
+})
+
+const displayedModels = computed(() => {
+  if (activeModelTab.value === 'reasoning') {
+    return models.value.filter((item) => item.supportReasoning === 1)
+  }
+  if (activeModelTab.value === 'fast') {
+    return models.value.filter((item) => item.supportReasoning !== 1 || (item.avgLatency ?? 99999) <= 1500)
+  }
+  return models.value
+})
+
+const canSendMessage = computed(() => {
+  if (!inputText.value.trim()) {
+    return false
+  }
+  if (selectedRoutingStrategy.value === 'fixed' && !selectedModel.value) {
+    return false
+  }
+  return true
+})
+
+const currentSelectedModel = computed(() => {
+  if (!selectedModel.value) {
+    return undefined
+  }
+  return models.value.find((item) => item.value === selectedModel.value)
+})
+
+const reasoningModelWarning = computed(() => {
+  if (!enableReasoning.value) {
+    return ''
+  }
+  if (selectedRoutingStrategy.value !== 'fixed') {
+    return '当前策略无法保证一定命中支持深度思考的模型'
+  }
+  if (!currentSelectedModel.value) {
+    return '请先选择一个支持深度思考的模型'
+  }
+  if (currentSelectedModel.value.supportReasoning !== 1) {
+    return `${currentSelectedModel.value.label} 不支持深度思考`
+  }
+  return ''
 })
 
 // ───── 快捷提示 ─────
@@ -388,7 +496,8 @@ const saveChatSession = () => {
 
   const session: StoredChatSession = {
     selectedModel: selectedModel.value,
-    selectedApiKey: selectedApiKey.value,
+    selectedRoutingStrategy: selectedRoutingStrategy.value,
+    enableReasoning: enableReasoning.value,
     inputText: inputText.value,
     messages: messages.value,
   }
@@ -409,12 +518,14 @@ const restoreChatSession = () => {
   try {
     const session = JSON.parse(raw) as StoredChatSession
     selectedModel.value = session.selectedModel
-    selectedApiKey.value = session.selectedApiKey
+    selectedRoutingStrategy.value = (session.selectedRoutingStrategy as typeof selectedRoutingStrategy.value) ?? 'auto'
+    enableReasoning.value = session.enableReasoning ?? false
     inputText.value = session.inputText ?? ''
     messages.value = Array.isArray(session.messages)
       ? session.messages.map((msg) => ({
           ...msg,
           streaming: false,
+          reasoningExpanded: false,
           tokens: msg.tokens ?? estimateTokenCount(`${msg.reasoning ?? ''}\n${msg.content}`),
         }))
       : []
@@ -436,6 +547,7 @@ const updateAssistantMessage = (index: number, patch: Partial<ChatMessage> = {})
     role: currentMessage.role,
     content: patch.content ?? currentMessage.content,
     reasoning: patch.reasoning ?? currentMessage.reasoning,
+    reasoningExpanded: patch.reasoningExpanded ?? currentMessage.reasoningExpanded,
     time: currentMessage.time,
     tokens:
       patch.tokens ??
@@ -457,6 +569,21 @@ const scrollToBottom = async () => {
 const clearMessages = () => {
   messages.value = []
   recalculateSessionStats()
+}
+
+const toggleReasoning = (index: number) => {
+  const currentMessage = messages.value[index]
+  if (!currentMessage?.reasoning) {
+    return
+  }
+  updateAssistantMessage(index, {
+    reasoningExpanded: !currentMessage.reasoningExpanded,
+  })
+}
+
+const selectModel = (value: string) => {
+  selectedModel.value = value
+  modelModalOpen.value = false
 }
 
 // ───── 加载数据 ─────
@@ -490,7 +617,18 @@ const loadModels = async () => {
           value: m.modelKey ?? '',
           provider: m.providerDisplayName ?? m.providerName ?? '',
           tagColor: providerColorMap[m.providerName?.toLowerCase() ?? ''] ?? 'default',
+          description: m.description ?? '',
+          supportReasoning: m.supportReasoning ?? 0,
+          avgLatency: m.avgLatency ?? undefined,
+          modelType: m.modelType ?? '',
+          capabilities: m.capabilities ?? '',
+          fastLabel: m.avgLatency ? `${m.avgLatency} ms` : '延迟未知',
+          reasoningLabel: m.supportReasoning === 1 ? '支持深度思考' : '标准模式',
         }))
+
+      if (!selectedModel.value || !models.value.some((item) => item.value === selectedModel.value)) {
+        selectedModel.value = models.value[0]?.value
+      }
     }
   } catch {
     antMessage.error('加载模型列表失败')
@@ -499,24 +637,14 @@ const loadModels = async () => {
   }
 }
 
-const loadApiKeys = async () => {
-  keysLoading.value = true
-  try {
-    const res = await listMyApiKeys({ pageNum: 1, pageSize: 100 })
-    if (res.data.code === 0 && res.data.data) {
-      apiKeys.value = (res.data.data.records ?? []).filter((k) => k.status === 'active')
-    }
-  } catch {
-    antMessage.error('加载 API Key 失败')
-  } finally {
-    keysLoading.value = false
-  }
-}
-
 // ───── 发送消息（流式） ─────
 const sendMessageInternal = async () => {
   const text = inputText.value.trim()
-  if (!text || !selectedModel.value) return
+  if (!text) return
+  if (selectedRoutingStrategy.value === 'fixed' && !selectedModel.value) {
+    antMessage.warning('固定模型策略下请先选择模型')
+    return
+  }
   if (isStreaming.value) return
 
   // 构建历史消息（发送给后端的 messages 数组）
@@ -547,6 +675,7 @@ const sendMessageInternal = async () => {
     role: 'assistant',
     content: '',
     reasoning: '',
+    reasoningExpanded: false,
     time: now(),
     tokens: 0,
     streaming: true,
@@ -554,10 +683,11 @@ const sendMessageInternal = async () => {
 
   try {
     const requestBody = {
-      model: selectedModel.value,
+      model: selectedRoutingStrategy.value === 'fixed' ? selectedModel.value : undefined,
       messages: [...historyMessages, { role: 'user', content: text }],
       stream: true,
-      routing_strategy: 'fixed',
+      routing_strategy: selectedRoutingStrategy.value,
+      enable_reasoning: enableReasoning.value,
     }
 
     const response = await fetch(`${API_BASE_URL}/internal/chat/completions`, {
@@ -682,6 +812,9 @@ const sendMessageInternal = async () => {
 }
 
 const sendMessage = () => {
+  if (!canSendMessage.value) {
+    return
+  }
   if (sendDebounceTimer.value) {
     window.clearTimeout(sendDebounceTimer.value)
   }
@@ -703,8 +836,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 // ───── 初始化 ─────
 onMounted(() => {
   restoreChatSession()
-  loadModels()
-  loadApiKeys()
+  void loadModels()
 })
 
 onBeforeUnmount(() => {
@@ -714,13 +846,22 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  [selectedModel, selectedApiKey, inputText, messages],
+  [selectedModel, selectedRoutingStrategy, enableReasoning, inputText, messages],
   () => {
     saveChatSession()
     recalculateSessionStats()
   },
   { deep: true },
 )
+
+watch(selectedRoutingStrategy, (value) => {
+  if (value !== 'fixed') {
+    return
+  }
+  if (!selectedModel.value && models.value.length > 0) {
+    selectedModel.value = models.value[0]?.value
+  }
+})
 </script>
 
 <style scoped>
@@ -757,44 +898,30 @@ watch(
   margin-bottom: 8px;
 }
 
-.sidebar-select {
-  width: 100%;
+.session-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fff, #f8fafc);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-:deep(.sidebar-select .ant-select-selector) {
-  border-radius: 7px !important;
-  font-size: 13px !important;
-}
-
-.model-option {
+.session-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-}
-
-.model-opt-name {
+  gap: 12px;
   font-size: 13px;
-  color: #374151;
-}
-.model-opt-tag {
-  font-size: 10px;
-  margin: 0;
+  color: #475569;
 }
 
-.key-option {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.key-opt-icon {
-  color: #9ca3af;
-  font-size: 12px;
-}
-.key-opt-name {
-  font-size: 13px;
-  color: #374151;
+.session-value {
+  max-width: 120px;
+  text-align: right;
+  color: #111827;
+  font-weight: 600;
 }
 
 /* 统计 */
@@ -1066,14 +1193,28 @@ watch(
   font-size: 12px;
 }
 
+.reasoning-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
 .reasoning-title {
   font-size: 11px;
   font-weight: 600;
   color: #2563eb;
-  margin-bottom: 6px;
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.reasoning-action {
+  color: #64748b;
 }
 
 .reasoning-content {
@@ -1081,6 +1222,7 @@ watch(
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+  margin-top: 10px;
 }
 
 /* 流式光标 */
@@ -1182,9 +1324,63 @@ watch(
 
 /* ── 输入区 ── */
 .input-area {
-  padding: 12px 16px 16px;
-  background: #fff;
   border-top: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  padding: 14px 16px 16px;
+}
+
+.composer-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbar-right {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.model-trigger {
+  border-radius: 999px;
+  border-color: #cbd5e1;
+}
+
+.reasoning-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.reasoning-switch__label {
+  font-size: 13px;
+  color: #475569;
+}
+
+.reasoning-warning-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .input-wrap {
@@ -1265,5 +1461,78 @@ watch(
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.model-card {
+  text-align: left;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.model-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.model-card--active {
+  border-color: #2563eb;
+  background: linear-gradient(180deg, #eff6ff, #ffffff);
+}
+
+.model-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.model-card__title {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.model-card__meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.model-card__desc {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+@media (max-width: 960px) {
+  .chat-page {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .chat-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .toolbar-left {
+    width: 100%;
+  }
 }
 </style>

@@ -57,6 +57,11 @@ public class ModelAddRequest implements Serializable {
     private BigDecimal outputPrice;
 
     /**
+     * 状态：active/inactive/deprecated
+     */
+    private String status;
+
+    /**
      * 优先级（越大越优先）
      */
     private Integer priority;
@@ -70,4 +75,9 @@ public class ModelAddRequest implements Serializable {
      * 能力标签（JSON数组）
      */
     private String capabilities;
+
+    /**
+     * 是否支持深度思考：0=不支持，1=支持
+     */
+    private Integer supportReasoning;
 }
