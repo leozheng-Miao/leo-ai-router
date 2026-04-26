@@ -2,10 +2,8 @@ package com.leo.airouterbackend.controller;
 
 import cn.hutool.extra.servlet.JakartaServletUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.leo.airouterbackend.annotation.AuthCheck;
 import com.leo.airouterbackend.annotation.RateLimit;
 import com.leo.airouterbackend.common.ResultUtils;
-import com.leo.airouterbackend.constant.UserConstant;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
 import com.leo.airouterbackend.model.dto.chat.ChatRequest;

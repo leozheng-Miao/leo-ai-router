@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import BasicLayout from '@/layouts/BasicLayout.vue'
+import { onMounted } from 'vue'
+import { useLoginUserStore } from '@/stores/loginUser'
+
+const loginUserStore = useLoginUserStore()
+
+// 每次应用挂载时尝试拉取登录状态
+onMounted(async () => {
+  await loginUserStore.fetchLoginUser()
+})
 </script>
 
 <template>

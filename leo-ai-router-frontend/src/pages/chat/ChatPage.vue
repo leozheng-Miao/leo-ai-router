@@ -23,9 +23,10 @@
         <div class="sidebar-label">选择 API Key</div>
         <a-select
           v-model:value="selectedApiKey"
-          placeholder="请选择 API Key"
+          placeholder="网页端聊天无需选择，可选"
           class="sidebar-select"
           :loading="keysLoading"
+          allow-clear
         >
           <a-select-option v-for="k in apiKeys" :key="k.id" :value="k.id">
             <div class="key-option">
@@ -78,7 +79,7 @@
             <MessageOutlined />
           </div>
           <div class="empty-title">开始一段对话</div>
-          <div class="empty-desc">选择模型和 API Key，然后输入你的问题</div>
+          <div class="empty-desc">选择模型后即可开始流式对话，API Key 仅供查看</div>
           <div class="quick-tips">
             <div v-for="tip in quickTips" :key="tip" class="quick-tip" @click="fillTip(tip)">
               {{ tip }}
@@ -156,7 +157,7 @@
               type="primary"
               class="send-btn"
               :loading="isStreaming"
-              :disabled="!inputText.trim() || !selectedModel || !selectedApiKey"
+              :disabled="!inputText.trim() || !selectedModel"
               @click="sendMessage"
             >
               <SendOutlined v-if="!isStreaming" />
@@ -168,8 +169,8 @@
           <span v-if="!selectedModel" class="hint-warn"
             ><ExclamationCircleOutlined /> 请先选择模型</span
           >
-          <span v-else-if="!selectedApiKey" class="hint-warn"
-            ><ExclamationCircleOutlined /> 请先选择 API Key</span
+          <span v-else-if="!selectedApiKey" class="hint-ok"
+            ><CheckCircleOutlined /> 当前使用网页端登录态聊天，API Key 可不选</span
           >
           <span v-else class="hint-ok"><CheckCircleOutlined /> 准备就绪，可以发送</span>
         </div>
@@ -179,8 +180,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, nextTick, onMounted } from 'vue'
+import { ref, reactive, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { message as antMessage } from 'ant-design-vue'
+import { marked } from 'marked'
 import {
   KeyOutlined,
   DeleteOutlined,
@@ -194,6 +196,11 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons-vue'
 import { listMyApiKeys } from '@/api/apiKeyController'
+import { listActiveModels } from '@/api/modelController'
+
+const API_BASE_URL = 'http://localhost:8123/api'
+const CHAT_STORAGE_KEY = 'leo-ai-router-chat-session'
+const SEND_DEBOUNCE_MS = 350
 
 // ───── 类型 ─────
 interface ChatMessage {
@@ -212,6 +219,45 @@ interface ModelOption {
   tagColor: string
 }
 
+interface StreamChunkChoice {
+  delta?: {
+    role?: string
+    content?: string
+    reasoningContent?: string
+  }
+  finishReason?: string | null
+}
+
+interface StreamChunkPayload {
+  choices?: StreamChunkChoice[]
+}
+
+interface BusinessResponse<T = unknown> {
+  code?: number
+  data?: T
+  message?: string
+}
+
+interface StoredChatSession {
+  selectedModel?: string
+  selectedApiKey?: number
+  inputText: string
+  messages: ChatMessage[]
+}
+
+const providerColorMap: Record<string, string> = {
+  qwen: 'orange',
+  dashscope: 'orange',
+  tongyi: 'orange',
+  aliyun: 'orange',
+  zhipu: 'green',
+  zhipuai: 'green',
+  glm: 'green',
+  deepseek: 'blue',
+  openai: 'purple',
+  gpt: 'purple',
+}
+
 // ───── 状态 ─────
 const selectedModel = ref<string | undefined>(undefined)
 const selectedApiKey = ref<number | undefined>(undefined)
@@ -221,6 +267,7 @@ const isStreaming = ref(false)
 const streamingContent = ref('')
 const streamingReasoning = ref('')
 const messageListRef = ref<HTMLDivElement | null>(null)
+const sendDebounceTimer = ref<number | null>(null)
 
 const modelsLoading = ref(false)
 const keysLoading = ref(false)
@@ -250,22 +297,154 @@ const formatNum = (n: number) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : Stri
 
 const now = () => new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+})
+
+const sanitizeHtml = (html: string) => {
+  return html
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '')
+}
+
 const renderContent = (text: string) => {
-  // 简单处理代码块和换行，不引入额外依赖
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/```([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>')
-    .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br/>')
+  return sanitizeHtml(marked.parse(text) as string)
 }
 
 const copyText = (text: string) => {
   navigator.clipboard.writeText(text).then(() => {
     antMessage.success('已复制')
   })
+}
+
+const isBusinessResponse = (value: unknown): value is BusinessResponse => {
+  return typeof value === 'object' && value !== null && 'code' in value
+}
+
+const redirectToLogin = () => {
+  const redirect = encodeURIComponent(window.location.href)
+  window.location.href = `/user/login?redirect=${redirect}`
+}
+
+const resolveErrorMessage = (payload: unknown, fallback = '请求失败') => {
+  if (isBusinessResponse(payload)) {
+    if (payload.code === 40100) {
+      antMessage.warning(payload.message || '请先登录')
+      redirectToLogin()
+      return payload.message || '请先登录'
+    }
+    return payload.message || fallback
+  }
+  if (payload instanceof Error) {
+    return payload.message
+  }
+  return fallback
+}
+
+const parseChunkPayload = (rawLine: string): StreamChunkPayload | BusinessResponse | null => {
+  const line = rawLine.trim()
+  if (!line) {
+    return null
+  }
+
+  const jsonText = line.startsWith('data:') ? line.slice(5).trim() : line
+  if (!jsonText || jsonText === '[DONE]') {
+    return null
+  }
+
+  try {
+    return JSON.parse(jsonText) as StreamChunkPayload | BusinessResponse
+  } catch {
+    return null
+  }
+}
+
+const estimateTokenCount = (text: string) => {
+  const normalized = text.trim()
+  if (!normalized) {
+    return 0
+  }
+
+  const asciiChars = (normalized.match(/[\x00-\x7F]/g) || []).length
+  const nonAsciiChars = normalized.length - asciiChars
+  const wordCount = normalized.split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.ceil(asciiChars / 4) + nonAsciiChars + Math.ceil(wordCount * 0.25))
+}
+
+const recalculateSessionStats = () => {
+  sessionStats.totalMessages = messages.value.length
+  sessionStats.totalTokens = messages.value.reduce((sum, message) => {
+    return sum + (message.tokens ?? estimateTokenCount(`${message.reasoning ?? ''}\n${message.content}`))
+  }, 0)
+}
+
+const saveChatSession = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const session: StoredChatSession = {
+    selectedModel: selectedModel.value,
+    selectedApiKey: selectedApiKey.value,
+    inputText: inputText.value,
+    messages: messages.value,
+  }
+  localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(session))
+}
+
+const restoreChatSession = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const raw = localStorage.getItem(CHAT_STORAGE_KEY)
+  if (!raw) {
+    recalculateSessionStats()
+    return
+  }
+
+  try {
+    const session = JSON.parse(raw) as StoredChatSession
+    selectedModel.value = session.selectedModel
+    selectedApiKey.value = session.selectedApiKey
+    inputText.value = session.inputText ?? ''
+    messages.value = Array.isArray(session.messages)
+      ? session.messages.map((msg) => ({
+          ...msg,
+          streaming: false,
+          tokens: msg.tokens ?? estimateTokenCount(`${msg.reasoning ?? ''}\n${msg.content}`),
+        }))
+      : []
+  } catch {
+    localStorage.removeItem(CHAT_STORAGE_KEY)
+    messages.value = []
+  }
+
+  recalculateSessionStats()
+}
+
+const updateAssistantMessage = (index: number, patch: Partial<ChatMessage> = {}) => {
+  const currentMessage = messages.value[index]
+  if (!currentMessage) {
+    return
+  }
+
+  messages.value[index] = {
+    role: currentMessage.role,
+    content: patch.content ?? currentMessage.content,
+    reasoning: patch.reasoning ?? currentMessage.reasoning,
+    time: currentMessage.time,
+    tokens:
+      patch.tokens ??
+      estimateTokenCount(
+        `${patch.reasoning ?? currentMessage.reasoning ?? ''}\n${patch.content ?? currentMessage.content}`,
+      ),
+    streaming: patch.streaming ?? currentMessage.streaming,
+  }
+  recalculateSessionStats()
 }
 
 const scrollToBottom = async () => {
@@ -277,27 +456,47 @@ const scrollToBottom = async () => {
 
 const clearMessages = () => {
   messages.value = []
-  sessionStats.totalMessages = 0
-  sessionStats.totalTokens = 0
+  recalculateSessionStats()
 }
 
 // ───── 加载数据 ─────
+// const loadModels = async () => {
+//   // 使用固定模型列表（与后端 db.sql 一致）
+//   models.value = [
+//     { label: 'Qwen Plus', value: 'qwen-plus', provider: '通义千问', tagColor: 'orange' },
+//     { label: 'Qwen Max', value: 'qwen-max', provider: '通义千问', tagColor: 'orange' },
+//     { label: 'Qwen Turbo', value: 'qwen-turbo', provider: '通义千问', tagColor: 'orange' },
+//     { label: 'GLM-4.7', value: 'glm-4.7', provider: '智谱AI', tagColor: 'green' },
+//     { label: 'GLM-4.7 Flash', value: 'glm-4.7-flash', provider: '智谱AI', tagColor: 'green' },
+//     { label: 'DeepSeek Chat', value: 'deepseek-chat', provider: 'DeepSeek', tagColor: 'blue' },
+//     {
+//       label: 'DeepSeek Reasoner',
+//       value: 'deepseek-reasoner',
+//       provider: 'DeepSeek',
+//       tagColor: 'blue',
+//     },
+//   ]
+// }
+
 const loadModels = async () => {
-  // 使用固定模型列表（与后端 db.sql 一致）
-  models.value = [
-    { label: 'Qwen Plus', value: 'qwen-plus', provider: '通义千问', tagColor: 'orange' },
-    { label: 'Qwen Max', value: 'qwen-max', provider: '通义千问', tagColor: 'orange' },
-    { label: 'Qwen Turbo', value: 'qwen-turbo', provider: '通义千问', tagColor: 'orange' },
-    { label: 'GLM-4.7', value: 'glm-4.7', provider: '智谱AI', tagColor: 'green' },
-    { label: 'GLM-4.7 Flash', value: 'glm-4.7-flash', provider: '智谱AI', tagColor: 'green' },
-    { label: 'DeepSeek Chat', value: 'deepseek-chat', provider: 'DeepSeek', tagColor: 'blue' },
-    {
-      label: 'DeepSeek Reasoner',
-      value: 'deepseek-reasoner',
-      provider: 'DeepSeek',
-      tagColor: 'blue',
-    },
-  ]
+  modelsLoading.value = true
+  try {
+    const res = await listActiveModels()
+    if (res.data.code === 0 && res.data.data) {
+      models.value = res.data.data
+        .filter((m) => m.modelType === 'chat')
+        .map((m) => ({
+          label: m.modelName ?? m.modelKey ?? '',
+          value: m.modelKey ?? '',
+          provider: m.providerDisplayName ?? m.providerName ?? '',
+          tagColor: providerColorMap[m.providerName?.toLowerCase() ?? ''] ?? 'default',
+        }))
+    }
+  } catch {
+    antMessage.error('加载模型列表失败')
+  } finally {
+    modelsLoading.value = false
+  }
 }
 
 const loadApiKeys = async () => {
@@ -315,17 +514,10 @@ const loadApiKeys = async () => {
 }
 
 // ───── 发送消息（流式） ─────
-const sendMessage = async () => {
+const sendMessageInternal = async () => {
   const text = inputText.value.trim()
-  if (!text || !selectedModel.value || !selectedApiKey.value) return
+  if (!text || !selectedModel.value) return
   if (isStreaming.value) return
-
-  // 找到选中 key 的值
-  const keyObj = apiKeys.value.find((k) => k.id === selectedApiKey.value)
-  if (!keyObj?.keyValue) {
-    antMessage.error('无法获取 API Key 值')
-    return
-  }
 
   // 构建历史消息（发送给后端的 messages 数组）
   const historyMessages = messages.value.map((m) => ({
@@ -338,9 +530,10 @@ const sendMessage = async () => {
     role: 'user',
     content: text,
     time: now(),
+    tokens: estimateTokenCount(text),
   })
   inputText.value = ''
-  sessionStats.totalMessages++
+  recalculateSessionStats()
   await scrollToBottom()
 
   // 开始流式请求
@@ -367,21 +560,28 @@ const sendMessage = async () => {
       routing_strategy: 'fixed',
     }
 
-    // 获取当前 API Key 原始值（未掩码），通过 keyValue 字段
-    const rawKey = keyObj.keyValue
-
-    const response = await fetch('http://localhost:8123/api/v1/chat/completions', {
+    const response = await fetch(`${API_BASE_URL}/internal/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${rawKey}`,
       },
+      credentials: 'include',
       body: JSON.stringify(requestBody),
     })
 
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      const payload = (await response.json()) as BusinessResponse
+      if (payload.code !== 0) {
+        throw new Error(resolveErrorMessage(payload))
+      }
+      throw new Error('当前接口未返回流式数据')
+    }
+
     if (!response.ok) {
-      const errText = await response.text()
-      throw new Error(`HTTP ${response.status}: ${errText}`)
+      const rawText = await response.text()
+      const parsedPayload = parseChunkPayload(rawText)
+      throw new Error(resolveErrorMessage(parsedPayload ?? rawText, `HTTP ${response.status}`))
     }
 
     const reader = response.body?.getReader()
@@ -401,68 +601,95 @@ const sendMessage = async () => {
       buffer = lines.pop() ?? ''
 
       for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed || !trimmed.startsWith('{')) continue
+        const payload = parseChunkPayload(line)
+        if (!payload) {
+          continue
+        }
+        if (isBusinessResponse(payload)) {
+          throw new Error(resolveErrorMessage(payload))
+        }
 
-        try {
-          const chunk = JSON.parse(trimmed)
+        const choices = payload.choices ?? []
+        if (choices.length === 0) {
+          continue
+        }
 
-          // 提取 delta
-          const choices = chunk.choices ?? []
-          if (choices.length === 0) continue
+        const delta = choices[0]?.delta ?? {}
+        const finishReason = choices[0]?.finishReason
 
-          const delta = choices[0]?.delta ?? {}
-          const finishReason = choices[0]?.finishReason
+        if (delta.content) {
+          streamingContent.value += delta.content
+        }
 
-          // 普通文本
-          if (delta.content) {
-            streamingContent.value += delta.content
-          }
+        if (delta.reasoningContent) {
+          streamingReasoning.value += delta.reasoningContent
+        }
 
-          // 深度思考内容
-          if (delta.reasoningContent) {
-            streamingReasoning.value += delta.reasoningContent
-          }
+        updateAssistantMessage(aiMsgIndex, {
+          content: streamingContent.value,
+          reasoning: streamingReasoning.value,
+        })
 
-          // 更新界面
-          messages.value[aiMsgIndex] = {
-            ...messages.value[aiMsgIndex],
-            content: streamingContent.value,
-            reasoning: streamingReasoning.value,
-          }
+        await scrollToBottom()
 
-          await scrollToBottom()
-
-          // 结束
-          if (finishReason === 'stop') {
-            break
-          }
-        } catch {
-          // 跳过无法解析的行
+        if (finishReason === 'stop') {
+          break
         }
       }
     }
 
-    // 完成：关闭 streaming 状态
-    messages.value[aiMsgIndex] = {
-      ...messages.value[aiMsgIndex],
-      streaming: false,
-      tokens: totalTokens,
+    const lastPayload = parseChunkPayload(buffer)
+    if (lastPayload) {
+      if (isBusinessResponse(lastPayload)) {
+        throw new Error(resolveErrorMessage(lastPayload))
+      }
+
+      const lastChoice = lastPayload.choices?.[0]
+      if (lastChoice?.delta?.content) {
+        streamingContent.value += lastChoice.delta.content
+      }
+      if (lastChoice?.delta?.reasoningContent) {
+        streamingReasoning.value += lastChoice.delta.reasoningContent
+      }
+
+      updateAssistantMessage(aiMsgIndex, {
+        content: streamingContent.value,
+        reasoning: streamingReasoning.value,
+      })
     }
 
-    sessionStats.totalMessages++
-    sessionStats.totalTokens += totalTokens
+    totalTokens = estimateTokenCount(`${streamingReasoning.value}\n${streamingContent.value}`)
+
+    // 完成：关闭 streaming 状态
+    updateAssistantMessage(aiMsgIndex, {
+      streaming: false,
+      tokens: totalTokens,
+    })
+
+    recalculateSessionStats()
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : '未知错误'
     antMessage.error('请求失败：' + errMsg)
     // 移除失败的 AI 消息
     messages.value.splice(aiMsgIndex, 1)
+    recalculateSessionStats()
   } finally {
     isStreaming.value = false
     streamingContent.value = ''
     streamingReasoning.value = ''
     await scrollToBottom()
   }
+}
+
+const sendMessage = () => {
+  if (sendDebounceTimer.value) {
+    window.clearTimeout(sendDebounceTimer.value)
+  }
+
+  sendDebounceTimer.value = window.setTimeout(() => {
+    sendDebounceTimer.value = null
+    void sendMessageInternal()
+  }, SEND_DEBOUNCE_MS)
 }
 
 // ───── 键盘快捷键 ─────
@@ -475,9 +702,25 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 // ───── 初始化 ─────
 onMounted(() => {
+  restoreChatSession()
   loadModels()
   loadApiKeys()
 })
+
+onBeforeUnmount(() => {
+  if (sendDebounceTimer.value) {
+    window.clearTimeout(sendDebounceTimer.value)
+  }
+})
+
+watch(
+  [selectedModel, selectedApiKey, inputText, messages],
+  () => {
+    saveChatSession()
+    recalculateSessionStats()
+  },
+  { deep: true },
+)
 </script>
 
 <style scoped>
@@ -737,6 +980,32 @@ onMounted(() => {
   word-break: break-word;
 }
 
+:deep(.msg-content > :first-child) {
+  margin-top: 0;
+}
+
+:deep(.msg-content > :last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.msg-content p) {
+  margin: 0 0 10px;
+}
+
+:deep(.msg-content ul),
+:deep(.msg-content ol) {
+  margin: 8px 0 12px 20px;
+  padding: 0;
+}
+
+:deep(.msg-content li) {
+  margin-bottom: 4px;
+}
+
+:deep(.msg-content pre) {
+  margin: 10px 0;
+}
+
 :deep(.code-block) {
   background: #1e1e2e;
   color: #cdd6f4;
@@ -755,6 +1024,32 @@ onMounted(() => {
   padding: 1px 5px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
+}
+
+:deep(.msg-content blockquote) {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-left: 3px solid #93c5fd;
+  background: #f8fafc;
+  color: #475569;
+}
+
+:deep(.msg-content table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+:deep(.msg-content th),
+:deep(.msg-content td) {
+  border: 1px solid #e5e7eb;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+:deep(.msg-content th) {
+  background: #f8fafc;
 }
 
 .bubble-user :deep(.inline-code) {
