@@ -30,6 +30,16 @@ const router = createRouter({
       component: () => import('@/pages/user/ProfilePage.vue'),
     },
     {
+      path: '/recharge/success',
+      name: 'rechargeSuccess',
+      component: () => import('@/pages/user/RechargeSuccessPage.vue'),
+    },
+    {
+      path: '/recharge/cancel',
+      name: 'rechargeCancel',
+      component: () => import('@/pages/user/RechargeCancelPage.vue'),
+    },
+    {
       path: '/history',
       name: 'history',
       component: () => import('@/pages/user/HistoryPage.vue'),

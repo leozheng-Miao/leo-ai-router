@@ -257,9 +257,16 @@ declare namespace API {
 
   type CreateRechargeRequest = {
     amount?: number
+    paymentMethod?: string
   }
 
   type CreateRechargeResponse = {
+    recordId?: number
+    paymentMethod?: string
+    displayType?: string
+    paymentId?: string
+    redirectUrl?: string
+    formHtml?: string
     checkoutUrl?: string
     sessionId?: string
   }

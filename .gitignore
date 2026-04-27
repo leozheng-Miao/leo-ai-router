@@ -1,3 +1,4 @@
+logs
 src/main/resources/application-local.yml
 HELP.md
 target/

@@ -21,6 +21,36 @@ export async function getMyRechargeRecords(
   })
 }
 
+/** 创建充值订单 POST /recharge/create */
+export async function createRecharge(
+  body: API.CreateRechargeRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseCreateRechargeResponse>('/recharge/create', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 创建支付宝充值订单 POST /recharge/alipay/create */
+export async function createAlipayRecharge(
+  body: API.CreateRechargeRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseCreateRechargeResponse>('/recharge/alipay/create', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** Stripe充值取消回调 GET /recharge/stripe/cancel */
 export async function stripeCancel(options?: { [key: string]: any }) {
   return request<API.BaseResponseString>('/recharge/stripe/cancel', {
