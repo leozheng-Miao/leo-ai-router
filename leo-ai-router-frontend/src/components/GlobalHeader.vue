@@ -71,9 +71,24 @@
                   </div>
                 </a-menu-item>
                 <a-menu-divider />
+                <a-menu-item key="profile">
+                  <RouterLink to="/profile" style="color: #374151; text-decoration: none">
+                    <KeyOutlined /> 个人中心
+                  </RouterLink>
+                </a-menu-item>
+                <a-menu-item key="history">
+                  <RouterLink to="/history" style="color: #374151; text-decoration: none">
+                    <KeyOutlined /> 调度历史
+                  </RouterLink>
+                </a-menu-item>
                 <a-menu-item key="keys">
                   <RouterLink to="/keys" style="color: #374151; text-decoration: none">
                     <KeyOutlined /> API Keys
+                  </RouterLink>
+                </a-menu-item>
+                <a-menu-item v-if="loginUserStore.loginUser.userRole === 'admin'" key="users">
+                  <RouterLink to="/users" style="color: #374151; text-decoration: none">
+                    <KeyOutlined /> 用户管理
                   </RouterLink>
                 </a-menu-item>
                 <a-menu-divider />

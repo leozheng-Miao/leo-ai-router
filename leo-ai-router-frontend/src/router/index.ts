@@ -25,6 +25,16 @@ const router = createRouter({
       component: () => import('@/pages/user/ApiKeyPage.vue'),
     },
     {
+      path: '/profile',
+      name: 'profile',
+      component: () => import('@/pages/user/ProfilePage.vue'),
+    },
+    {
+      path: '/history',
+      name: 'history',
+      component: () => import('@/pages/user/HistoryPage.vue'),
+    },
+    {
       path: '/providers',
       name: 'providers',
       component: () => import('@/pages/admin/ProviderManagementPage.vue'),
@@ -38,6 +48,11 @@ const router = createRouter({
       path: '/chat',
       name: 'chat',
       component: () => import('@/pages/chat/ChatPage.vue'),
+    },
+    {
+      path: '/users',
+      name: 'users',
+      component: () => import('@/pages/admin/UserManagementPage.vue'),
     },
   ],
 })
