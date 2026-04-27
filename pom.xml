@@ -188,6 +188,13 @@
             <version>2.4.0</version>
             <scope>runtime</scope>
         </dependency>
+
+        <!-- 支付宝沙箱 -->
+        <dependency>
+            <groupId>com.alipay.sdk</groupId>
+            <artifactId>alipay-sdk-java</artifactId>
+            <version>4.22.110.ALL</version>
+        </dependency>
     </dependencies>
 
     <build>

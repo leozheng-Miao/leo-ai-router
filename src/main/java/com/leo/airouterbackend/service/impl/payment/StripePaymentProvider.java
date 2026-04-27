@@ -1,11 +1,14 @@
-package com.leo.airouterbackend.service.impl;
+package com.leo.airouterbackend.service.impl.payment;
 
 import com.leo.airouterbackend.config.StripeConfig;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
+import com.leo.airouterbackend.model.dto.payment.PaymentCreateResult;
 import com.leo.airouterbackend.model.entity.RechargeRecord;
+import com.leo.airouterbackend.model.enums.PaymentDisplayTypeEnum;
+import com.leo.airouterbackend.model.enums.PaymentMethodEnum;
 import com.leo.airouterbackend.service.RechargeService;
-import com.leo.airouterbackend.service.StripePaymentService;
+import com.leo.airouterbackend.service.payment.PaymentProvider;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
@@ -20,7 +23,7 @@ import java.math.BigDecimal;
 
 @Service
 @Slf4j
-public class StripePaymentServiceImpl implements StripePaymentService {
+public class StripePaymentProvider implements PaymentProvider {
 
     @Resource
     private StripeConfig stripeConfig;
@@ -29,30 +32,28 @@ public class StripePaymentServiceImpl implements StripePaymentService {
     private RechargeService rechargeService;
 
     @Override
-    public Session createCheckoutSession(Long userId, BigDecimal amount, String successUrl, String cancelUrl) {
+    public PaymentMethodEnum getPaymentMethod() {
+        return PaymentMethodEnum.STRIPE;
+    }
+
+    @Override
+    public PaymentCreateResult createRecharge(Long userId, BigDecimal amount) {
         try {
-            // 创建充值记录
-            RechargeRecord record = rechargeService.createRechargeRecord(userId, amount, "stripe");
-
-            // 将金额转换为最小货币单位（分）
+            RechargeRecord record = rechargeService.createRechargeRecord(userId, amount, PaymentMethodEnum.STRIPE.getValue());
             long amountInCents = amount.multiply(new BigDecimal("100")).longValue();
-
-            // 创建 Stripe Checkout Session
             SessionCreateParams params = SessionCreateParams.builder()
                     .setMode(SessionCreateParams.Mode.PAYMENT)
-                    .setSuccessUrl(successUrl + "?session_id={CHECKOUT_SESSION_ID}")
-                    .setCancelUrl(cancelUrl)
+                    .setSuccessUrl(buildStripeSuccessUrl(record.getId()))
+                    .setCancelUrl(stripeConfig.getCancelUrl())
                     .addLineItem(
                             SessionCreateParams.LineItem.builder()
                                     .setPriceData(
                                             SessionCreateParams.LineItem.PriceData.builder()
-                                                    // 人民币
                                                     .setCurrency("cny")
-                                                    // 金额（分）
                                                     .setUnitAmount(amountInCents)
                                                     .setProductData(
                                                             SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                                                    .setName("Yu AI Router 账户充值")
+                                                                    .setName("LeoAI Router 账户充值")
                                                                     .setDescription("充值金额：¥" + amount)
                                                                     .build()
                                                     )
@@ -65,56 +66,52 @@ public class StripePaymentServiceImpl implements StripePaymentService {
                     .putMetadata("recordId", record.getId().toString())
                     .putMetadata("amount", amount.toString())
                     .build();
-
             Session session = Session.create(params);
-            log.info("创建 Stripe 支付会话成功：用户 {}，金额 ¥{}，SessionID {}", userId, amount, session.getId());
-            return session;
-
+            rechargeService.updateRechargeStatus(record.getId(), "pending", session.getId());
+            log.info("Stripe 下单成功：recordId={}, sessionId={}", record.getId(), session.getId());
+            return PaymentCreateResult.builder()
+                    .recordId(record.getId())
+                    .paymentMethod(PaymentMethodEnum.STRIPE.getValue())
+                    .displayType(PaymentDisplayTypeEnum.REDIRECT_URL.getValue())
+                    .paymentId(session.getId())
+                    .redirectUrl(session.getUrl())
+                    .build();
         } catch (StripeException e) {
-            log.error("创建 Stripe 支付会话失败：{}", e.getMessage(), e);
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建支付会话失败：" + e.getMessage());
+            log.error("创建 Stripe 支付会话失败", e);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建 Stripe 支付会话失败：" + e.getMessage());
         }
     }
 
-    @Override
     public boolean handlePaymentSuccess(String sessionId) {
         try {
-            // 获取会话信息
             Session session = Session.retrieve(sessionId);
-
             if (!"paid".equals(session.getPaymentStatus())) {
-                log.warn("支付会话 {} 状态不是已支付：{}", sessionId, session.getPaymentStatus());
+                log.warn("Stripe 会话未支付成功：sessionId={}, status={}", sessionId, session.getPaymentStatus());
                 return false;
             }
-
-            // 从元数据中获取充值记录ID
             String recordIdStr = session.getMetadata().get("recordId");
             if (recordIdStr == null) {
-                log.error("支付会话 {} 缺少 recordId 元数据", sessionId);
+                log.error("Stripe 会话缺少 recordId 元数据：sessionId={}", sessionId);
                 return false;
             }
-
-            Long recordId = Long.parseLong(recordIdStr);
-
-            // 完成充值
-            rechargeService.completeRecharge(recordId, sessionId);
-
-            log.info("处理支付成功回调完成：SessionID {}", sessionId);
+            rechargeService.completeRecharge(Long.parseLong(recordIdStr), sessionId);
             return true;
-
         } catch (StripeException e) {
-            log.error("获取支付会话失败：{}", e.getMessage(), e);
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "获取支付会话失败");
+            log.error("处理 Stripe 成功回调失败", e);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "处理 Stripe 支付成功失败");
         }
     }
 
-    @Override
     public Event constructWebhookEvent(String payload, String sigHeader) {
         try {
             return Webhook.constructEvent(payload, sigHeader, stripeConfig.getWebhookSecret());
         } catch (SignatureVerificationException e) {
-            log.error("Webhook 签名验证失败：{}", e.getMessage());
-            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "Webhook 签名验证失败");
+            log.error("Stripe Webhook 验签失败", e);
+            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "Stripe Webhook 验签失败");
         }
+    }
+
+    private String buildStripeSuccessUrl(Long recordId) {
+        return stripeConfig.getSuccessUrl() + "?session_id={CHECKOUT_SESSION_ID}&record_id=" + recordId;
     }
 }

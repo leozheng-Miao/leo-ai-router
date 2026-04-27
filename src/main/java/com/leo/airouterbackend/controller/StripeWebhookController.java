@@ -1,10 +1,9 @@
 package com.leo.airouterbackend.controller;
 
-import com.leo.airouterbackend.service.StripePaymentService;
+import com.leo.airouterbackend.service.impl.payment.StripePaymentProvider;
 import com.stripe.model.Event;
 import com.stripe.model.checkout.Session;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class StripeWebhookController {
 
     @Resource
-    private StripePaymentService stripePaymentService;
+    private StripePaymentProvider stripePaymentProvider;
 
     /**
      * Stripe Webhook 回调
@@ -35,7 +34,7 @@ public class StripeWebhookController {
 
         try {
             // 验证 Webhook 签名
-            Event event = stripePaymentService.constructWebhookEvent(payload, sigHeader);
+            Event event = stripePaymentProvider.constructWebhookEvent(payload, sigHeader);
 
             // 处理不同的事件类型
             switch (event.getType()) {
@@ -45,7 +44,7 @@ public class StripeWebhookController {
                             .getObject().orElse(null);
                     if (session != null) {
                         log.info("支付成功：SessionID {}", session.getId());
-                        stripePaymentService.handlePaymentSuccess(session.getId());
+                        stripePaymentProvider.handlePaymentSuccess(session.getId());
                     }
                     break;
 
