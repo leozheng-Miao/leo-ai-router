@@ -1,4 +1,12 @@
 declare namespace API {
+  type alipayNotifyParams = {
+    params: Record<string, any>
+  }
+
+  type alipayReturnParams = {
+    params: Record<string, any>
+  }
+
   type ApiKeyCreateRequest = {
     keyName?: string
   }
@@ -151,15 +159,15 @@ declare namespace API {
     message?: string
   }
 
-  type BaseResponseProviderVO = {
-    code?: number
-    data?: ProviderVO
-    message?: string
-  }
-
   type BaseResponsePluginExecuteVO = {
     code?: number
     data?: PluginExecuteVO
+    message?: string
+  }
+
+  type BaseResponseProviderVO = {
+    code?: number
+    data?: ProviderVO
     message?: string
   }
 
@@ -323,6 +331,10 @@ declare namespace API {
     pluginKey: string
   }
 
+  type getProviderVOByIdParams = {
+    id: number
+  }
+
   type getUserAnalysisParams = {
     userId: number
   }
@@ -476,52 +488,6 @@ declare namespace API {
     updateTime?: string
   }
 
-  type ProviderAddRequest = {
-    providerName?: string
-    displayName?: string
-    baseUrl?: string
-    apiKey?: string
-    status?: string
-    priority?: number
-    config?: string
-  }
-
-  type ProviderQueryRequest = {
-    pageNum?: number
-    pageSize?: number
-    sortField?: string
-    sortOrder?: string
-    providerName?: string
-    displayName?: string
-    status?: string
-    healthStatus?: string
-  }
-
-  type ProviderUpdateRequest = {
-    id?: number
-    displayName?: string
-    baseUrl?: string
-    apiKey?: string
-    status?: string
-    priority?: number
-    config?: string
-  }
-
-  type ProviderVO = {
-    id?: number
-    providerName?: string
-    displayName?: string
-    baseUrl?: string
-    status?: string
-    healthStatus?: string
-    avgLatency?: number
-    successRate?: number
-    priority?: number
-    config?: string
-    createTime?: string
-    updateTime?: string
-  }
-
   type PageApiKeyVO = {
     records?: ApiKeyVO[]
     pageNumber?: number
@@ -634,6 +600,52 @@ declare namespace API {
     priority?: number
   }
 
+  type ProviderAddRequest = {
+    providerName?: string
+    displayName?: string
+    baseUrl?: string
+    apiKey?: string
+    status?: string
+    priority?: number
+    config?: string
+  }
+
+  type ProviderQueryRequest = {
+    pageNum?: number
+    pageSize?: number
+    sortField?: string
+    sortOrder?: string
+    providerName?: string
+    displayName?: string
+    status?: string
+    healthStatus?: string
+  }
+
+  type ProviderUpdateRequest = {
+    id?: number
+    displayName?: string
+    baseUrl?: string
+    apiKey?: string
+    status?: string
+    priority?: number
+    config?: string
+  }
+
+  type ProviderVO = {
+    id?: number
+    providerName?: string
+    displayName?: string
+    baseUrl?: string
+    status?: string
+    healthStatus?: string
+    avgLatency?: number
+    successRate?: number
+    priority?: number
+    config?: string
+    createTime?: string
+    updateTime?: string
+  }
+
   type QuotaUpdateRequest = {
     userId?: number
     tokenQuota?: number
@@ -719,6 +731,7 @@ declare namespace API {
 
   type stripeSuccessParams = {
     session_id: string
+    record_id?: number
   }
 
   type User = {

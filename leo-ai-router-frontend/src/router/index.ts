@@ -55,9 +55,19 @@ const router = createRouter({
       component: () => import('@/pages/admin/ModelManagementPage.vue'),
     },
     {
+      path: '/plugins',
+      name: 'plugins',
+      component: () => import('@/pages/admin/PluginManagementPage.vue'),
+    },
+    {
       path: '/chat',
       name: 'chat',
       component: () => import('@/pages/chat/ChatPage.vue'),
+    },
+    {
+      path: '/images',
+      name: 'images',
+      component: () => import('@/pages/image/ImageGenerationPage.vue'),
     },
     {
       path: '/users',

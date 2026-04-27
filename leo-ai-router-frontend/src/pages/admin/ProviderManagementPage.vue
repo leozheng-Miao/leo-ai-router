@@ -159,7 +159,7 @@ import {
   deleteProvider,
   listProviderVoByPage,
   updateProvider,
-} from '@/api/providerController'
+} from '@/api/modelProviderController'
 
 const providerStatuses = [
   { label: '启用', value: 'active' },

@@ -8,9 +8,9 @@ import * as chatController from './chatController'
 import * as userController from './userController'
 import * as statsController from './statsController'
 import * as rechargeController from './rechargeController'
+import * as modelProviderController from './modelProviderController'
 import * as pluginController from './pluginController'
 import * as modelController from './modelController'
-import * as providerController from './providerController'
 import * as internalChatController from './internalChatController'
 import * as userProviderKeyController from './userProviderKeyController'
 import * as apiKeyController from './apiKeyController'
@@ -24,9 +24,9 @@ export default {
   userController,
   statsController,
   rechargeController,
+  modelProviderController,
   pluginController,
   modelController,
-  providerController,
   internalChatController,
   userProviderKeyController,
   apiKeyController,

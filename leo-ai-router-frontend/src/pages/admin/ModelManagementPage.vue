@@ -212,7 +212,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { addModel, deleteModel, listModelVoByPage, updateModel } from '@/api/modelController'
-import { listProviderVo } from '@/api/providerController'
+import { listProviderVo } from '@/api/modelProviderController'
 
 const loading = ref(false)
 const saving = ref(false)

@@ -126,7 +126,9 @@ const navItems = [
   { label: '首页', path: '/' },
   { label: '提供者管理', path: '/providers' },
   { label: '模型管理', path: '/models' },
+  { label: '插件管理', path: '/plugins' },
   { label: '在线对话', path: '/chat' },
+  { label: 'AI 绘图', path: '/images' },
 ]
 
 const isActive = (path: string) => (path === '/' ? route.path === '/' : route.path.startsWith(path))
