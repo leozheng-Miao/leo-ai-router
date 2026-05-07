@@ -20,7 +20,7 @@ public class ImageGenerationRequest implements Serializable {
     private String prompt;
 
     /**
-     * 模型名称（默认 qwen-image-plus）
+     * 模型名称
      */
     private String model;
 

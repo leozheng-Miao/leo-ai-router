@@ -7,6 +7,7 @@ import com.leo.airouterbackend.model.dto.chat.ChatRequest;
 import com.leo.airouterbackend.model.dto.chat.StreamChunk;
 import com.leo.airouterbackend.model.entity.Model;
 import com.leo.airouterbackend.model.entity.ModelProvider;
+import com.leo.airouterbackend.util.OpenAiProviderUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -116,8 +117,10 @@ public class OpenAIAdapter implements ModelAdapter {
      */
     private OpenAiChatModel createChatModel(ModelProvider provider, Model model) {
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl(provider.getBaseUrl())
+                .baseUrl(OpenAiProviderUtils.normalizeBaseUrl(provider.getBaseUrl()))
                 .apiKey(provider.getApiKey())
+                .restClientBuilder(OpenAiProviderUtils.buildRestClientBuilder(provider))
+                .webClientBuilder(OpenAiProviderUtils.buildWebClientBuilder(provider))
                 .build();
 
         OpenAiChatOptions options = OpenAiChatOptions.builder()
@@ -147,6 +150,9 @@ public class OpenAIAdapter implements ModelAdapter {
         }
         if (chatRequest.getMaxTokens() != null) {
             optionsBuilder.maxTokens(chatRequest.getMaxTokens());
+        }
+        if (chatRequest.getEnableReasoning() != null) {
+            optionsBuilder.reasoningEffort(chatRequest.getEnableReasoning() ? "medium" : "none");
         }
 
         return new Prompt(messages, optionsBuilder.build());

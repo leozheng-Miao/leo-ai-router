@@ -1,10 +1,8 @@
 package com.leo.airouterbackend.service.impl;
 
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.http.HttpRequest;
-import cn.hutool.http.HttpResponse;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.leo.airouterbackend.adaptor.ImageModelAdapter;
+import com.leo.airouterbackend.adaptor.ImageModelAdapterFactory;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
 import com.leo.airouterbackend.mapper.ImageGenerationRecordMapper;
@@ -31,10 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * @program: leo-ai-router-backend
@@ -68,10 +63,9 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
     private UserService userService;
 
     @Resource
-    private ObjectMapper objectMapper;
+    private ImageModelAdapterFactory imageModelAdapterFactory;
 
-    private static final String DEFAULT_MODEL = "qwen-image-plus";
-    private static final String DEFAULT_SIZE = "1024*1024";
+    private static final String DEFAULT_SIZE = "1024x1024";
     private static final int DEFAULT_N = 1;
 
     @Override
@@ -92,13 +86,13 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
         }
 
         // 设置默认值
-        String modelKey = StrUtil.isNotBlank(request.getModel()) ? request.getModel() : DEFAULT_MODEL;
         String size = StrUtil.isNotBlank(request.getSize()) ? request.getSize() : DEFAULT_SIZE;
-        int n = 1;  // 固定生成1张
-        Model model = modelService.getByModelKey(modelKey);
+        int n = DEFAULT_N;
+        Model model = resolveImageModel(request.getModel());
         if (model == null || !"image".equals(model.getModelType())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型不存在或不是图片生成模型");
         }
+        String modelKey = model.getModelKey();
         ModelProvider modelProvider = modelProviderService.getById(model.getProviderId());
         if (modelProvider == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型提供者不存在");
@@ -109,7 +103,9 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
         }
 
         try {
-            ImageGenerationResponse response = callImageGenerationModel(model, modelProvider, request, size, n);
+            request.setSize(size);
+            ImageModelAdapter imageModelAdapter = imageModelAdapterFactory.getAdapter(modelProvider.getProviderName());
+            ImageGenerationResponse response = imageModelAdapter.generate(model, modelProvider, request, n);
 
             long duration = System.currentTimeMillis() - startTime;
             int actualImageCount = response.getData() != null ? response.getData().size() : n;
@@ -184,120 +180,13 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
         return page(Page.of(pageNum, pageSize), queryWrapper);
     }
 
-    /**
-     * 调用通义万相生成图片（异步模式 + 轮询）
-     */
-    private ImageGenerationResponse callImageGenerationModel(Model model,
-                                                             ModelProvider provider,
-                                                             ImageGenerationRequest request,
-                                                             String size,
-                                                             int n) {
-        try {
-            // 构建请求JSON
-            Map<String, Object> body = new HashMap<>();
-            body.put("model", model.getModelKey());
-            body.put("input", Map.of("prompt", request.getPrompt()));
-            body.put("parameters", Map.of("size", size, "n", n));
-            String requestBody = objectMapper.writeValueAsString(body);
-
-            // 调用通义万相API（异步模式）
-            String apiUrl = provider.getBaseUrl().replace("/compatible-mode", "")
-                    + "/api/v1/services/aigc/text2image/image-synthesis";
-
-            HttpResponse httpResponse = HttpRequest.post(apiUrl)
-                    .header("Authorization", "Bearer " + provider.getApiKey())
-                    .header("Content-Type", "application/json")
-                    .header("X-DashScope-Async", "enable")  // 异步模式
-                    .body(requestBody)
-                    .timeout(30000)
-                    .execute();
-
-            String responseBody = httpResponse.body();
-            log.info("通义万相创建任务响应：{}", responseBody);
-
-            // 解析响应，获取任务ID
-            JsonNode rootNode = objectMapper.readTree(responseBody);
-
-            if (!rootNode.has("output") || !rootNode.get("output").has("task_id")) {
-                String errorMsg = rootNode.has("message") ? rootNode.get("message").asText() : "未返回任务ID";
-                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "创建图片生成任务失败：" + errorMsg);
-            }
-
-            String taskId = rootNode.get("output").get("task_id").asText();
-            log.info("图片生成任务ID：{}", taskId);
-
-            // 轮询任务状态
-            String taskApiUrl = provider.getBaseUrl().replace("/compatible-mode", "")
-                    + "/api/v1/tasks/" + taskId;
-
-            int maxRetries = 60;  // 最多轮询60次
-            int retryCount = 0;
-
-            while (retryCount < maxRetries) {
-                Thread.sleep(2000);  // 等待2秒
-
-                HttpResponse taskResponse = HttpRequest.get(taskApiUrl)
-                        .header("Authorization", "Bearer " + provider.getApiKey())
-                        .timeout(10000)
-                        .execute();
-
-                String taskResponseBody = taskResponse.body();
-                JsonNode taskNode = objectMapper.readTree(taskResponseBody);
-
-                if (!taskNode.has("output") || !taskNode.get("output").has("task_status")) {
-                    retryCount++;
-                    continue;
-                }
-
-                String taskStatus = taskNode.get("output").get("task_status").asText();
-                log.info("任务状态：{} (轮询次数: {})", taskStatus, retryCount + 1);
-
-                if ("SUCCEEDED".equals(taskStatus)) {
-                    // 任务成功，提取图片URL
-                    List<ImageGenerationResponse.ImageData> imageDataList = new ArrayList<>();
-
-                    if (taskNode.has("output") && taskNode.get("output").has("results")) {
-                        JsonNode results = taskNode.get("output").get("results");
-                        for (JsonNode result : results) {
-                            if (result.has("url")) {
-                                ImageGenerationResponse.ImageData imageData =
-                                        ImageGenerationResponse.ImageData.builder()
-                                                .url(result.get("url").asText())
-                                                .revisedPrompt(request.getPrompt())
-                                                .build();
-                                imageDataList.add(imageData);
-                            }
-                        }
-                    }
-
-                    if (imageDataList.isEmpty()) {
-                        throw new BusinessException(ErrorCode.SYSTEM_ERROR, "任务成功但未返回图片");
-                    }
-
-                    return ImageGenerationResponse.builder()
-                            .created(System.currentTimeMillis() / 1000)
-                            .data(imageDataList)
-                            .build();
-
-                } else if ("FAILED".equals(taskStatus)) {
-                    String errorMsg = taskNode.has("output") && taskNode.get("output").has("message")
-                            ? taskNode.get("output").get("message").asText()
-                            : "任务失败";
-                    throw new BusinessException(ErrorCode.SYSTEM_ERROR, "图片生成失败：" + errorMsg);
-                }
-
-                // PENDING, RUNNING 状态继续轮询
-                retryCount++;
-            }
-
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "图片生成超时");
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "图片生成被中断");
-        } catch (Exception e) {
-            log.error("调用通义万相API失败", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "调用图片生成API失败: " + e.getMessage());
+    private Model resolveImageModel(String requestedModelKey) {
+        if (StrUtil.isNotBlank(requestedModelKey)) {
+            return modelService.getByModelKey(requestedModelKey);
         }
+
+        return modelService.getActiveModelsByType("image").stream()
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的图片模型"));
     }
 }

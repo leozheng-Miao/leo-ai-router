@@ -3,9 +3,11 @@ package com.leo.airouterbackend;
 import com.leo.airouter.sdk.LeoAIClient;
 import com.leo.airouter.sdk.model.ChatResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 public class IntegrationTest {
     @Test
+    @EnabledIfSystemProperty(named = "run.integration.tests", matches = "true")
     void testSimple() {
         // 创建客户端
         LeoAIClient client = LeoAIClient.builder()

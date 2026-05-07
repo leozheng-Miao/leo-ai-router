@@ -51,8 +51,9 @@
             </a-form-item>
             <a-form-item label="质量">
               <a-select v-model:value="form.quality">
-                <a-select-option value="standard">standard</a-select-option>
-                <a-select-option value="hd">hd</a-select-option>
+                <a-select-option value="low">low</a-select-option>
+                <a-select-option value="medium">medium</a-select-option>
+                <a-select-option value="high">high</a-select-option>
               </a-select>
             </a-form-item>
           </div>
@@ -197,7 +198,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { DownloadOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import { generateImage, getMyRecords } from '@/api/imageController'
@@ -214,14 +215,16 @@ const detailOpen = ref(false)
 const detailRecord = ref<API.ImageGenerationRecord>()
 const imageCacheKey = 'leo_ai_router_image_history_cache'
 
-const sizeOptions = ['1024*1024', '1280*720', '720*1280']
+const defaultImageSizes = ['1024x1024', '1280x720', '720x1280']
+const openAiImage15Sizes = ['1024x1024', '1536x1024', '1024x1536']
+const openAiImage2Sizes = ['auto', '1024x1024', '1536x1024', '1024x1536', '2048x2048', '2048x1152']
 
 const form = reactive<API.ImageGenerationRequest>({
   prompt: '',
   model: '',
-  size: '1024*1024',
-  quality: 'standard',
-  response_format: 'url',
+  size: '1024x1024',
+  quality: 'medium',
+  response_format: 'b64_json',
   n: 1,
 })
 
@@ -234,6 +237,16 @@ const pagination = reactive({
 const selectedModel = computed(() =>
   imageModels.value.find((item) => item.modelKey === form.model),
 )
+
+const sizeOptions = computed(() => {
+  if (selectedModel.value?.modelKey === 'gpt-image-2') {
+    return openAiImage2Sizes
+  }
+  if (selectedModel.value?.modelKey === 'gpt-image-1.5') {
+    return openAiImage15Sizes
+  }
+  return defaultImageSizes
+})
 
 const estimatedCost = computed(() => Number(selectedModel.value?.inputPrice ?? 0).toFixed(2))
 
@@ -280,6 +293,17 @@ const updateCacheByRecord = (recordId: number | string | undefined, imageUrl: st
 
 const getRecordImage = (record: API.ImageGenerationRecord) =>
   normalizeImageUrl(record.imageUrl || record.imageData || readImageCache()[String(record.id ?? '')])
+
+watch(selectedModel, (model) => {
+  const options = sizeOptions.value
+  if (options.length > 0 && !options.includes(form.size || '')) {
+    form.size = options[0]
+  }
+  if (!model) return
+  if (form.quality !== 'low' && form.quality !== 'medium' && form.quality !== 'high') {
+    form.quality = 'medium'
+  }
+})
 
 const loadModels = async () => {
   const res = await listActiveModelsByType({ modelType: 'image' })
@@ -338,7 +362,7 @@ const handleGenerate = async () => {
       model: form.model,
       size: form.size,
       quality: form.quality,
-      response_format: 'url',
+      response_format: 'b64_json',
       n: 1,
     })
     const images = res.data?.data ?? []
@@ -374,8 +398,8 @@ const handleGenerate = async () => {
 
 const resetForm = () => {
   form.prompt = ''
-  form.size = '1024*1024'
-  form.quality = 'standard'
+  form.size = sizeOptions.value[0] ?? '1024x1024'
+  form.quality = 'medium'
 }
 
 const openPreview = (url: string) => {

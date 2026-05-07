@@ -1,6 +1,7 @@
 package com.leo.airouterbackend.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import com.leo.airouterbackend.mapper.RequestLogMapper;
@@ -11,6 +12,7 @@ import com.leo.airouterbackend.model.enums.ProviderStatusEnum;
 import com.leo.airouterbackend.service.HealthCheckService;
 import com.leo.airouterbackend.service.ModelProviderService;
 import com.leo.airouterbackend.service.ModelService;
+import com.leo.airouterbackend.util.OpenAiProviderUtils;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +20,8 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -423,16 +427,35 @@ public class HealthCheckServiceImpl implements HealthCheckService {
      */
     private boolean sendHealthCheckRequest(ModelProvider provider) {
         try {
-            String baseUrl = provider.getBaseUrl();
             String apiKey = provider.getApiKey();
+            String url = buildHealthCheckUrl(provider);
 
-            // 构造一个简单的测试请求（检查模型列表接口）
-            String url = baseUrl + "/models";
-            
-            HttpResponse response = HttpRequest.get(url)
+            HttpRequest request = HttpRequest.get(url)
                     .header("Authorization", "Bearer " + apiKey)
-                    .timeout(HEALTH_CHECK_TIMEOUT)
-                    .execute();
+                    .timeout(HEALTH_CHECK_TIMEOUT);
+
+            if (OpenAiProviderUtils.isOpenAiProvider(provider.getProviderName())) {
+                OpenAiProviderUtils.OpenAiTransportConfig transportConfig =
+                        OpenAiProviderUtils.resolveTransportConfig(provider);
+                request.setConnectionTimeout(transportConfig.connectTimeoutMillis());
+                request.setReadTimeout(transportConfig.responseTimeoutSeconds() * 1000);
+
+                OpenAiProviderUtils.ProxySettings proxySettings = transportConfig.proxySettings();
+                if (proxySettings != null && proxySettings.enabled()) {
+                    if (proxySettings.type() == reactor.netty.transport.ProxyProvider.Proxy.HTTP) {
+                        request.setHttpProxy(proxySettings.host(), proxySettings.port());
+                        if (StrUtil.isNotBlank(proxySettings.username())) {
+                            request.basicProxyAuth(proxySettings.username(),
+                                    StrUtil.nullToDefault(proxySettings.password(), ""));
+                        }
+                    } else {
+                        request.setProxy(new Proxy(Proxy.Type.SOCKS,
+                                new InetSocketAddress(proxySettings.host(), proxySettings.port())));
+                    }
+                }
+            }
+
+            HttpResponse response = request.execute();
 
             // 检查响应状态码
             return response.getStatus() == 200 || response.getStatus() == 401;
@@ -440,6 +463,14 @@ public class HealthCheckServiceImpl implements HealthCheckService {
             log.warn("提供者 {} 健康检查请求失败: {}", provider.getDisplayName(), e.getMessage());
             return false;
         }
+    }
+
+    String buildHealthCheckUrl(ModelProvider provider) {
+        String baseUrl = OpenAiProviderUtils.trimTrailingSlash(provider.getBaseUrl());
+        if (OpenAiProviderUtils.isOpenAiProvider(provider.getProviderName())) {
+            return OpenAiProviderUtils.buildModelsUrl(baseUrl);
+        }
+        return baseUrl + "/models";
     }
 
     /**

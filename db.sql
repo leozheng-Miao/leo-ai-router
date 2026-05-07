@@ -105,7 +105,7 @@ create table if not exists api_key
 create table if not exists model_provider
 (
     id           bigint auto_increment comment 'id' primary key,
-    providerName varchar(64)                             not null comment '提供者名称（如：qwen/zhipu/deepseek）',
+    providerName varchar(64)                             not null comment '提供者名称（如：qwen/zhipu/deepseek/openai）',
     displayName  varchar(128)                            not null comment '显示名称（如：通义千问/智谱AI/DeepSeek）',
     baseUrl      varchar(512)                            not null comment 'API基础URL',
     apiKey       varchar(512)                            not null comment 'API密钥',
@@ -157,7 +157,8 @@ create table if not exists model
 INSERT INTO model_provider (providerName, displayName, baseUrl, apiKey, status, priority)
 VALUES ('qwen', '通义千问', 'https://dashscope.aliyuncs.com/compatible-mode', 'YOUR_QWEN_API_KEY', 'active', 100),
        ('zhipu', '智谱AI', 'https://open.bigmodel.cn/api/paas', 'YOUR_ZHIPU_API_KEY', 'active', 90),
-       ('deepseek', 'DeepSeek', 'https://api.deepseek.com', 'YOUR_DEEPSEEK_API_KEY', 'active', 80);
+       ('deepseek', 'DeepSeek', 'https://api.deepseek.com', 'YOUR_DEEPSEEK_API_KEY', 'active', 80),
+       ('openai', 'OpenAI', 'https://api.openai.com', 'YOUR_OPENAI_API_KEY', 'active', 95);
 
 -- 初始化模型数据
 INSERT INTO model (providerId, modelKey, modelName, modelType, description, contextLength, inputPrice, outputPrice,
@@ -177,7 +178,12 @@ VALUES
 -- DeepSeek模型
 (3, 'deepseek-reasoner', 'DeepSeek Reasoner', 'chat', 'DeepSeek对话模型，支持深度思考', 32768, 0.001, 0.002, 100, 1),
 (3, 'deepseek-chat', 'DeepSeek Chat', 'chat', 'DeepSeek对话模型', 32768, 0.001, 0.002, 100, 0),
-(3, 'deepseek-coder', 'DeepSeek Coder', 'chat', 'DeepSeek代码模型', 32768, 0.001, 0.002, 90, 0);
+(3, 'deepseek-coder', 'DeepSeek Coder', 'chat', 'DeepSeek代码模型', 32768, 0.001, 0.002, 90, 0),
+
+-- OpenAI 模型
+(4, 'gpt-5.5', 'GPT-5.5', 'chat', 'OpenAI 旗舰推理与编码模型', 1000000, 0, 0, 105, 1),
+(4, 'gpt-5.4', 'GPT-5.4', 'chat', 'OpenAI 高性能专业工作模型', 1000000, 0, 0, 100, 1),
+(4, 'gpt-5.4-mini', 'GPT-5.4 Mini', 'chat', 'OpenAI 轻量高吞吐推理模型', 400000, 0, 0, 95, 1);
 
 create table if not exists recharge_record
 (
@@ -240,7 +246,9 @@ create table image_generation_record
 INSERT INTO model (providerId, modelKey, modelName, modelType, description, contextLength, inputPrice, outputPrice, priority, supportReasoning)
 VALUES
     -- 阶段七：绘图模型
-    (1, 'qwen-image-plus', 'Qwen Image Plus', 'image', '通义万相文生图模型', 0, 0.08, 0, 100, 0);
+    (1, 'qwen-image-plus', 'Qwen Image Plus', 'image', '通义万相文生图模型', 0, 0.08, 0, 100, 0),
+    (4, 'gpt-image-2', 'GPT Image 2', 'image', 'OpenAI 高质量图像生成模型', 0, 0, 0, 98, 0),
+    (4, 'gpt-image-1.5', 'GPT Image 1.5', 'image', 'OpenAI 图像生成模型', 0, 0, 0, 96, 0);
 
 -- 插件配置表
 create table if not exists plugin_config

@@ -48,7 +48,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableConfigurationProperties(MailProperties.class)
 @EnableAspectJAutoProxy(exposeProxy = true)
 @EnableAsync
-@EnableScheduling
+//@EnableScheduling
 public class LeoAiRouterBackendApplication {
 
     public static void main(String[] args) {
