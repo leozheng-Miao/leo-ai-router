@@ -17,6 +17,7 @@ import * as apiKeyController from './apiKeyController'
 import * as blacklistController from './blacklistController'
 import * as healthController from './healthController'
 import * as balanceController from './balanceController'
+import * as conversationController from './conversationController'
 export default {
   stripeWebhookController,
   imageController,
@@ -33,4 +34,5 @@ export default {
   blacklistController,
   healthController,
   balanceController,
+  conversationController,
 }

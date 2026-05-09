@@ -2,6 +2,50 @@
   <div class="chat-page">
     <!-- 左侧配置栏 -->
     <div class="chat-sidebar">
+      <div class="conversation-header">
+        <div>
+          <div class="sidebar-label">会话列表</div>
+          <div class="conversation-count">{{ conversations.length }} 个会话</div>
+        </div>
+        <a-button type="primary" size="small" class="new-conversation-btn" @click="handleCreateConversation">
+          <PlusOutlined /> 新建
+        </a-button>
+      </div>
+
+      <div class="conversation-panel">
+        <div v-if="conversationLoading" class="conversation-state">加载会话中...</div>
+        <div v-else-if="conversationError" class="conversation-state conversation-state--error">
+          <span>{{ conversationError }}</span>
+          <a-button size="small" type="link" @click="() => loadConversations()">
+            <ReloadOutlined /> 重试
+          </a-button>
+        </div>
+        <div v-else-if="conversations.length === 0" class="conversation-state">
+          暂无会话
+        </div>
+        <div v-else class="conversation-list">
+          <button
+            v-for="item in conversations"
+            :key="item.id"
+            type="button"
+            class="conversation-item"
+            :class="{ 'conversation-item--active': item.id === activeConversationId }"
+            @click="selectConversation(item.id)"
+          >
+            <span class="conversation-title">{{ item.title || '新对话' }}</span>
+            <span class="conversation-preview">{{ item.lastMessagePreview || '暂无回复' }}</span>
+            <span class="conversation-time">{{ formatConversationTime(item.lastMessageAt) }}</span>
+            <a-tooltip title="删除会话">
+              <span class="conversation-delete" @click.stop="handleDeleteConversation(item.id)">
+                <DeleteOutlined />
+              </span>
+            </a-tooltip>
+          </button>
+        </div>
+      </div>
+
+      <a-divider style="margin: 10px 0" />
+
       <div class="sidebar-section">
         <div class="sidebar-label">当前会话配置</div>
         <div class="session-card">
@@ -39,16 +83,8 @@
 
       <a-divider style="margin: 8px 0" />
 
-      <!-- 清空按钮 -->
-      <a-button
-        block
-        danger
-        ghost
-        :disabled="messages.length === 0"
-        class="clear-btn"
-        @click="clearMessages"
-      >
-        <DeleteOutlined /> 清空对话
+      <a-button block ghost :disabled="!activeConversationId" class="clear-btn" @click="reloadCurrentConversation">
+        <ReloadOutlined /> 同步历史
       </a-button>
     </div>
 
@@ -57,12 +93,15 @@
       <!-- 消息列表 -->
       <div ref="messageListRef" class="message-list">
         <!-- 空状态 -->
-        <div v-if="messages.length === 0" class="empty-state">
+        <div v-if="messageLoading" class="empty-state">
+          <div class="thinking-dots"><span></span><span></span><span></span></div>
+        </div>
+        <div v-else-if="messages.length === 0" class="empty-state">
           <div class="empty-icon">
             <MessageOutlined />
           </div>
           <div class="empty-title">开始一段对话</div>
-          <div class="empty-desc">选择策略与模型后即可开始流式对话，API Key 仅供查看</div>
+          <div class="empty-desc">消息会自动保存到当前会话，刷新后仍可继续</div>
           <div class="quick-tips">
             <div v-for="tip in quickTips" :key="tip" class="quick-tip" @click="fillTip(tip)">
               {{ tip }}
@@ -221,7 +260,7 @@
 
 <script setup lang="ts">
 import { computed, ref, reactive, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
-import { message as antMessage } from 'ant-design-vue'
+import { message as antMessage, Modal } from 'ant-design-vue'
 import { marked } from 'marked'
 import {
   DeleteOutlined,
@@ -233,15 +272,31 @@ import {
   SendOutlined,
   ExclamationCircleOutlined,
   CheckCircleOutlined,
+  PlusOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons-vue'
 import { listActiveModels } from '@/api/modelController'
+import {
+  createConversation,
+  deleteConversation,
+  listConversationMessages,
+  listConversations,
+  streamConversationMessage,
+  type ConversationVO,
+  type MessageVO,
+} from '@/api/conversationController'
+import { useLoginUserStore } from '@/stores/loginUser'
 
-const API_BASE_URL = 'http://localhost:8123/api'
-const CHAT_STORAGE_KEY = 'leo-ai-router-chat-session'
+const CHAT_CONFIG_STORAGE_KEY = 'leo-ai-router-chat-config'
 const SEND_DEBOUNCE_MS = 350
+const CONVERSATION_PAGE_SIZE = 20
+const MESSAGE_PAGE_SIZE = 30
+const FAILED_ASSISTANT_CONTENT = '消息发送失败，请重试'
 
 // ───── 类型 ─────
 interface ChatMessage {
+  id?: number
+  seq?: number
   role: 'user' | 'assistant'
   content: string
   reasoning?: string
@@ -265,19 +320,6 @@ interface ModelOption {
   reasoningLabel: string
 }
 
-interface StreamChunkChoice {
-  delta?: {
-    role?: string
-    content?: string
-    reasoningContent?: string
-  }
-  finishReason?: string | null
-}
-
-interface StreamChunkPayload {
-  choices?: StreamChunkChoice[]
-}
-
 interface BusinessResponse<T = unknown> {
   code?: number
   data?: T
@@ -289,7 +331,6 @@ interface StoredChatSession {
   selectedRoutingStrategy?: string
   enableReasoning?: boolean
   inputText: string
-  messages: ChatMessage[]
 }
 
 const providerColorMap: Record<string, string> = {
@@ -311,6 +352,8 @@ const selectedRoutingStrategy = ref<'auto' | 'cost_first' | 'latency_first' | 'f
 const enableReasoning = ref(false)
 const inputText = ref('')
 const messages = ref<ChatMessage[]>([])
+const conversations = ref<ConversationVO[]>([])
+const activeConversationId = ref<number | undefined>(undefined)
 const isStreaming = ref(false)
 const streamingContent = ref('')
 const streamingReasoning = ref('')
@@ -318,9 +361,13 @@ const messageListRef = ref<HTMLDivElement | null>(null)
 const sendDebounceTimer = ref<number | null>(null)
 const modelModalOpen = ref(false)
 const activeModelTab = ref<'all' | 'fast' | 'reasoning'>('all')
+const conversationLoading = ref(false)
+const messageLoading = ref(false)
+const conversationError = ref('')
 
 const modelsLoading = ref(false)
 const models = ref<ModelOption[]>([])
+const loginUserStore = useLoginUserStore()
 
 const sessionStats = reactive({
   totalMessages: 0,
@@ -363,6 +410,11 @@ const canSendMessage = computed(() => {
     return false
   }
   return true
+})
+
+const currentUserId = computed(() => {
+  const id = Number(loginUserStore.loginUser.id)
+  return Number.isFinite(id) && id > 0 ? id : undefined
 })
 
 const currentSelectedModel = computed(() => {
@@ -437,6 +489,18 @@ const redirectToLogin = () => {
   window.location.href = `/user/login?redirect=${redirect}`
 }
 
+const requireUserId = async () => {
+  if (!currentUserId.value) {
+    await loginUserStore.fetchLoginUser()
+  }
+  if (!currentUserId.value) {
+    antMessage.warning('请先登录')
+    redirectToLogin()
+    throw new Error('请先登录')
+  }
+  return currentUserId.value
+}
+
 const resolveErrorMessage = (payload: unknown, fallback = '请求失败') => {
   if (isBusinessResponse(payload)) {
     if (payload.code === 40100) {
@@ -452,21 +516,27 @@ const resolveErrorMessage = (payload: unknown, fallback = '请求失败') => {
   return fallback
 }
 
-const parseChunkPayload = (rawLine: string): StreamChunkPayload | BusinessResponse | null => {
-  const line = rawLine.trim()
-  if (!line) {
-    return null
+const parseStreamLine = (rawLine: string) => {
+  if (!rawLine.startsWith('data:')) {
+    return { done: false, text: '' }
   }
-
-  const jsonText = line.startsWith('data:') ? line.slice(5).trim() : line
-  if (!jsonText || jsonText === '[DONE]') {
-    return null
+  const text = rawLine.slice(5).replace(/^\s/, '')
+  if (text.trim() === '[DONE]') {
+    return { done: true, text: '' }
   }
+  return { done: false, text }
+}
 
+const parseBusinessPayload = (rawText: string): BusinessResponse | string => {
+  const text = rawText.trim()
+  if (!text) {
+    return rawText
+  }
+  const jsonText = text.startsWith('data:') ? text.slice(5).trim() : text
   try {
-    return JSON.parse(jsonText) as StreamChunkPayload | BusinessResponse
+    return JSON.parse(jsonText) as BusinessResponse
   } catch {
-    return null
+    return rawText
   }
 }
 
@@ -499,9 +569,8 @@ const saveChatSession = () => {
     selectedRoutingStrategy: selectedRoutingStrategy.value,
     enableReasoning: enableReasoning.value,
     inputText: inputText.value,
-    messages: messages.value,
   }
-  localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(session))
+  localStorage.setItem(CHAT_CONFIG_STORAGE_KEY, JSON.stringify(session))
 }
 
 const restoreChatSession = () => {
@@ -509,7 +578,7 @@ const restoreChatSession = () => {
     return
   }
 
-  const raw = localStorage.getItem(CHAT_STORAGE_KEY)
+  const raw = localStorage.getItem(CHAT_CONFIG_STORAGE_KEY)
   if (!raw) {
     recalculateSessionStats()
     return
@@ -521,17 +590,8 @@ const restoreChatSession = () => {
     selectedRoutingStrategy.value = (session.selectedRoutingStrategy as typeof selectedRoutingStrategy.value) ?? 'auto'
     enableReasoning.value = session.enableReasoning ?? false
     inputText.value = session.inputText ?? ''
-    messages.value = Array.isArray(session.messages)
-      ? session.messages.map((msg) => ({
-          ...msg,
-          streaming: false,
-          reasoningExpanded: false,
-          tokens: msg.tokens ?? estimateTokenCount(`${msg.reasoning ?? ''}\n${msg.content}`),
-        }))
-      : []
   } catch {
-    localStorage.removeItem(CHAT_STORAGE_KEY)
-    messages.value = []
+    localStorage.removeItem(CHAT_CONFIG_STORAGE_KEY)
   }
 
   recalculateSessionStats()
@@ -544,6 +604,8 @@ const updateAssistantMessage = (index: number, patch: Partial<ChatMessage> = {})
   }
 
   messages.value[index] = {
+    id: currentMessage.id,
+    seq: currentMessage.seq,
     role: currentMessage.role,
     content: patch.content ?? currentMessage.content,
     reasoning: patch.reasoning ?? currentMessage.reasoning,
@@ -566,11 +628,6 @@ const scrollToBottom = async () => {
   }
 }
 
-const clearMessages = () => {
-  messages.value = []
-  recalculateSessionStats()
-}
-
 const toggleReasoning = (index: number) => {
   const currentMessage = messages.value[index]
   if (!currentMessage?.reasoning) {
@@ -584,6 +641,175 @@ const toggleReasoning = (index: number) => {
 const selectModel = (value: string) => {
   selectedModel.value = value
   modelModalOpen.value = false
+}
+
+const formatConversationTime = (value?: string) => {
+  if (!value) {
+    return ''
+  }
+  return new Date(value).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+const formatMessageTime = (value?: string) => {
+  if (!value) {
+    return now()
+  }
+  return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+const toChatMessage = (message: MessageVO): ChatMessage | null => {
+  if (message.role !== 'user' && message.role !== 'assistant') {
+    return null
+  }
+  const content = message.content ?? ''
+  return {
+    id: message.id,
+    seq: message.seq,
+    role: message.role,
+    content,
+    reasoning: '',
+    reasoningExpanded: false,
+    time: formatMessageTime(message.createdAt),
+    tokens: estimateTokenCount(content),
+    streaming: false,
+  }
+}
+
+const loadMessages = async (conversationId: number) => {
+  messageLoading.value = true
+  try {
+    const userId = await requireUserId()
+    const res = await listConversationMessages(userId, conversationId, {
+      page: 0,
+      size: MESSAGE_PAGE_SIZE,
+    })
+    if (res.data.code !== 0) {
+      throw new Error(res.data.message || '加载消息历史失败')
+    }
+    messages.value = (res.data.data?.records ?? [])
+      .map(toChatMessage)
+      .filter((item): item is ChatMessage => Boolean(item))
+    recalculateSessionStats()
+    await scrollToBottom()
+  } catch (err) {
+    antMessage.error(resolveErrorMessage(err, '加载消息历史失败'))
+  } finally {
+    messageLoading.value = false
+  }
+}
+
+const selectConversation = async (conversationId?: number) => {
+  if (!conversationId || conversationId === activeConversationId.value || isStreaming.value) {
+    return
+  }
+  activeConversationId.value = conversationId
+  await loadMessages(conversationId)
+}
+
+const loadConversations = async (preferredConversationId?: number) => {
+  conversationLoading.value = true
+  conversationError.value = ''
+  try {
+    const userId = await requireUserId()
+    const res = await listConversations(userId, { page: 0, size: CONVERSATION_PAGE_SIZE })
+    if (res.data.code !== 0) {
+      throw new Error(res.data.message || '加载会话列表失败')
+    }
+    conversations.value = res.data.data?.records ?? []
+    const preferred = preferredConversationId
+      ? conversations.value.find((item) => item.id === preferredConversationId)
+      : undefined
+    const activeStillExists = conversations.value.find((item) => item.id === activeConversationId.value)
+    const nextConversation = preferred ?? activeStillExists ?? conversations.value[0]
+
+    if (nextConversation?.id) {
+      activeConversationId.value = nextConversation.id
+      await loadMessages(nextConversation.id)
+    } else {
+      activeConversationId.value = undefined
+      messages.value = []
+      recalculateSessionStats()
+    }
+  } catch (err) {
+    conversationError.value = resolveErrorMessage(err, '加载会话列表失败')
+  } finally {
+    conversationLoading.value = false
+  }
+}
+
+const handleCreateConversation = async () => {
+  if (isStreaming.value) {
+    return
+  }
+  try {
+    const userId = await requireUserId()
+    const res = await createConversation(userId, { convType: 1 })
+    if (res.data.code !== 0 || !res.data.data?.conversationId) {
+      throw new Error(res.data.message || '创建会话失败')
+    }
+    activeConversationId.value = res.data.data.conversationId
+    messages.value = []
+    recalculateSessionStats()
+    await loadConversations(res.data.data.conversationId)
+  } catch (err) {
+    antMessage.error(resolveErrorMessage(err, '创建会话失败'))
+  }
+}
+
+const ensureConversation = async () => {
+  if (activeConversationId.value) {
+    return activeConversationId.value
+  }
+  const userId = await requireUserId()
+  const res = await createConversation(userId, { convType: 1 })
+  if (res.data.code !== 0 || !res.data.data?.conversationId) {
+    throw new Error(res.data.message || '创建会话失败')
+  }
+  activeConversationId.value = res.data.data.conversationId
+  await loadConversations(res.data.data.conversationId)
+  return res.data.data.conversationId
+}
+
+const reloadCurrentConversation = async () => {
+  if (!activeConversationId.value) {
+    return
+  }
+  await loadMessages(activeConversationId.value)
+  await loadConversations(activeConversationId.value)
+}
+
+const handleDeleteConversation = async (conversationId?: number) => {
+  if (!conversationId || isStreaming.value) {
+    return
+  }
+  Modal.confirm({
+    title: '删除会话',
+    content: '删除后该会话不会再出现在列表中。',
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        const userId = await requireUserId()
+        const res = await deleteConversation(userId, conversationId)
+        if (res.data.code !== 0) {
+          throw new Error(res.data.message || '删除会话失败')
+        }
+        if (conversationId === activeConversationId.value) {
+          activeConversationId.value = undefined
+          messages.value = []
+        }
+        await loadConversations()
+      } catch (err) {
+        antMessage.error(resolveErrorMessage(err, '删除会话失败'))
+      }
+    },
+  })
 }
 
 // ───── 加载数据 ─────
@@ -647,11 +873,16 @@ const sendMessageInternal = async () => {
   }
   if (isStreaming.value) return
 
-  // 构建历史消息（发送给后端的 messages 数组）
-  const historyMessages = messages.value.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }))
+  let conversationId: number
+  let userId: number
+  try {
+    conversationId = await ensureConversation()
+    userId = await requireUserId()
+  } catch (err) {
+    antMessage.error(resolveErrorMessage(err, '创建会话失败'))
+    return
+  }
+  const mode = enableReasoning.value ? 2 : 1
 
   // 添加用户消息到界面
   messages.value.push({
@@ -682,21 +913,9 @@ const sendMessageInternal = async () => {
   })
 
   try {
-    const requestBody = {
-      model: selectedRoutingStrategy.value === 'fixed' ? selectedModel.value : undefined,
-      messages: [...historyMessages, { role: 'user', content: text }],
-      stream: true,
-      routing_strategy: selectedRoutingStrategy.value,
-      enable_reasoning: enableReasoning.value,
-    }
-
-    const response = await fetch(`${API_BASE_URL}/internal/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(requestBody),
+    const response = await streamConversationMessage(userId, conversationId, {
+      content: text,
+      mode,
     })
 
     const contentType = response.headers.get('content-type') || ''
@@ -710,7 +929,7 @@ const sendMessageInternal = async () => {
 
     if (!response.ok) {
       const rawText = await response.text()
-      const parsedPayload = parseChunkPayload(rawText)
+      const parsedPayload = parseBusinessPayload(rawText)
       throw new Error(resolveErrorMessage(parsedPayload ?? rawText, `HTTP ${response.status}`))
     }
 
@@ -721,6 +940,7 @@ const sendMessageInternal = async () => {
 
     let buffer = ''
     let totalTokens = 0
+    let streamDone = false
 
     while (true) {
       const { done, value } = await reader.read()
@@ -731,60 +951,32 @@ const sendMessageInternal = async () => {
       buffer = lines.pop() ?? ''
 
       for (const line of lines) {
-        const payload = parseChunkPayload(line)
-        if (!payload) {
+        const payload = parseStreamLine(line)
+        if (!payload.text && !payload.done) {
           continue
         }
-        if (isBusinessResponse(payload)) {
-          throw new Error(resolveErrorMessage(payload))
+        if (payload.done) {
+          streamDone = true
+          break
         }
-
-        const choices = payload.choices ?? []
-        if (choices.length === 0) {
-          continue
-        }
-
-        const delta = choices[0]?.delta ?? {}
-        const finishReason = choices[0]?.finishReason
-
-        if (delta.content) {
-          streamingContent.value += delta.content
-        }
-
-        if (delta.reasoningContent) {
-          streamingReasoning.value += delta.reasoningContent
-        }
+        streamingContent.value += payload.text
 
         updateAssistantMessage(aiMsgIndex, {
           content: streamingContent.value,
-          reasoning: streamingReasoning.value,
         })
 
         await scrollToBottom()
-
-        if (finishReason === 'stop') {
-          break
-        }
       }
+      if (streamDone) break
     }
 
-    const lastPayload = parseChunkPayload(buffer)
-    if (lastPayload) {
-      if (isBusinessResponse(lastPayload)) {
-        throw new Error(resolveErrorMessage(lastPayload))
-      }
-
-      const lastChoice = lastPayload.choices?.[0]
-      if (lastChoice?.delta?.content) {
-        streamingContent.value += lastChoice.delta.content
-      }
-      if (lastChoice?.delta?.reasoningContent) {
-        streamingReasoning.value += lastChoice.delta.reasoningContent
-      }
-
+    const lastPayload = parseStreamLine(buffer)
+    if (lastPayload.done) {
+      streamDone = true
+    } else if (lastPayload.text) {
+      streamingContent.value += lastPayload.text
       updateAssistantMessage(aiMsgIndex, {
         content: streamingContent.value,
-        reasoning: streamingReasoning.value,
       })
     }
 
@@ -797,12 +989,30 @@ const sendMessageInternal = async () => {
     })
 
     recalculateSessionStats()
+    await loadMessages(conversationId)
+    await loadConversations(conversationId)
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : '未知错误'
     antMessage.error('请求失败：' + errMsg)
-    // 移除失败的 AI 消息
-    messages.value.splice(aiMsgIndex, 1)
+    updateAssistantMessage(aiMsgIndex, {
+      content: FAILED_ASSISTANT_CONTENT,
+      streaming: false,
+      tokens: estimateTokenCount(FAILED_ASSISTANT_CONTENT),
+    })
     recalculateSessionStats()
+    await loadMessages(conversationId)
+    if (!messages.value.some((item) => item.role === 'assistant' && item.content === FAILED_ASSISTANT_CONTENT)) {
+      messages.value.push({
+        role: 'assistant',
+        content: FAILED_ASSISTANT_CONTENT,
+        reasoning: '',
+        reasoningExpanded: false,
+        time: now(),
+        tokens: estimateTokenCount(FAILED_ASSISTANT_CONTENT),
+        streaming: false,
+      })
+    }
+    await loadConversations(conversationId)
   } finally {
     isStreaming.value = false
     streamingContent.value = ''
@@ -836,7 +1046,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 // ───── 初始化 ─────
 onMounted(() => {
   restoreChatSession()
-  void loadModels()
+  void Promise.all([loadModels(), loadConversations()])
 })
 
 onBeforeUnmount(() => {
@@ -846,7 +1056,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  [selectedModel, selectedRoutingStrategy, enableReasoning, inputText, messages],
+  [selectedModel, selectedRoutingStrategy, enableReasoning, inputText],
   () => {
     saveChatSession()
     recalculateSessionStats()
@@ -896,6 +1106,140 @@ watch(selectedRoutingStrategy, (value) => {
   text-transform: uppercase;
   letter-spacing: 0.6px;
   margin-bottom: 8px;
+}
+
+.conversation-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.conversation-count {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.new-conversation-btn {
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.conversation-panel {
+  min-height: 120px;
+  max-height: 34vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.conversation-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.conversation-panel::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
+
+.conversation-state {
+  min-height: 92px;
+  border: 1px dashed #dbe4f0;
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.conversation-state--error {
+  color: #dc2626;
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conversation-item {
+  position: relative;
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 34px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.conversation-item:hover {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.conversation-item--active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.conversation-title {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-preview {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-time {
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.conversation-delete {
+  position: absolute;
+  right: 8px;
+  top: 9px;
+  color: #94a3b8;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.16s ease;
+}
+
+.conversation-delete:hover {
+  color: #dc2626;
+  background: #fee2e2;
 }
 
 .session-card {
@@ -1529,6 +1873,11 @@ watch(selectedRoutingStrategy, (value) => {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid #e5e7eb;
+    max-height: 45vh;
+  }
+
+  .conversation-panel {
+    max-height: 180px;
   }
 
   .toolbar-left {
