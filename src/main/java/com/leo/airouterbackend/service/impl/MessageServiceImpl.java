@@ -30,6 +30,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -75,10 +77,13 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
         Page<ConversationMessage> messagePage = this.page(Page.of(page + 1, size), QueryWrapper.create()
                 .eq("conversation_id", conversationId)
                 .eq("user_id", userId)
-                .orderBy("seq", true));
+                .orderBy("seq", false));
+
+        List<ConversationMessage> latestMessages = new ArrayList<>(messagePage.getRecords());
+        Collections.reverse(latestMessages);
 
         Page<MessageVO> result = new Page<>(page + 1, size, messagePage.getTotalRow());
-        result.setRecords(messagePage.getRecords().stream().map(this::toMessageVO).toList());
+        result.setRecords(latestMessages.stream().map(this::toMessageVO).toList());
         return result;
     }
 
