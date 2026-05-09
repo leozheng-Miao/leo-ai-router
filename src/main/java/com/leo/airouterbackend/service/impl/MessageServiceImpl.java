@@ -77,7 +77,7 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
                 .eq("user_id", userId)
                 .orderBy("seq", true));
 
-        Page<MessageVO> result = new Page<>(page, size, messagePage.getTotalRow());
+        Page<MessageVO> result = new Page<>(page + 1, size, messagePage.getTotalRow());
         result.setRecords(messagePage.getRecords().stream().map(this::toMessageVO).toList());
         return result;
     }

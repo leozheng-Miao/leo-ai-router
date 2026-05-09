@@ -106,7 +106,7 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
                 .map(conversation -> toConversationVO(conversation, previewMap.get(conversation.getId())))
                 .toList();
 
-        Page<ConversationVO> result = new Page<>(page, size, conversationPage.getTotalRow());
+        Page<ConversationVO> result = new Page<>(page + 1, size, conversationPage.getTotalRow());
         result.setRecords(voRecords);
         redisTemplate.opsForValue().set(cacheKey, result, LIST_CACHE_TTL);
         return result;
