@@ -87,7 +87,7 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
         Conversation conversation = conversationService.validateOwner(userId, conversationId);
         int mode = normalizeMode(request);
         String userContent = normalizeContent(request);
-        Model selectedModel = resolveModel();
+        Model selectedModel = resolveModel(request);
 
         saveMessage(conversationId, userId, ROLE_USER, userContent, mode);
         ChatRequest chatRequest = buildChatRequest(conversationId, mode, selectedModel, false);
@@ -105,7 +105,7 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
             Conversation conversation = conversationService.validateOwner(userId, conversationId);
             int mode = normalizeMode(request);
             String userContent = normalizeContent(request);
-            Model selectedModel = resolveModel();
+            Model selectedModel = resolveModel(request);
 
             saveMessage(conversationId, userId, ROLE_USER, userContent, mode);
             ChatRequest chatRequest = buildChatRequest(conversationId, mode, selectedModel, true);
@@ -174,8 +174,12 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
         return null;
     }
 
-    private Model resolveModel() {
-        Model selectedModel = routingService.selectModel(DEFAULT_ROUTING_STRATEGY, "chat", null);
+    private Model resolveModel(SendMessageRequest request) {
+        String requestedModel = request == null ? null : request.getModel();
+        String requestedStrategy = StrUtil.isNotBlank(requestedModel)
+                ? FIXED_ROUTING_STRATEGY
+                : StrUtil.blankToDefault(request == null ? null : request.getRoutingStrategy(), DEFAULT_ROUTING_STRATEGY);
+        Model selectedModel = routingService.selectModel(requestedStrategy, "chat", requestedModel);
         if (selectedModel == null || StrUtil.isBlank(selectedModel.getModelKey())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型");
         }

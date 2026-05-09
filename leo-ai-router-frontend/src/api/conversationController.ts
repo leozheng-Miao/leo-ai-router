@@ -39,6 +39,8 @@ export type CreateConversationRequest = {
 export type SendMessageRequest = {
   content: string
   mode: number
+  model?: string
+  routing_strategy?: string
 }
 
 const buildUserHeader = (userId: number) => ({

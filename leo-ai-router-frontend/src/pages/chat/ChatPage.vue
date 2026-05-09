@@ -640,6 +640,7 @@ const toggleReasoning = (index: number) => {
 
 const selectModel = (value: string) => {
   selectedModel.value = value
+  selectedRoutingStrategy.value = 'fixed'
   modelModalOpen.value = false
 }
 
@@ -916,6 +917,8 @@ const sendMessageInternal = async () => {
     const response = await streamConversationMessage(userId, conversationId, {
       content: text,
       mode,
+      model: selectedRoutingStrategy.value === 'fixed' ? selectedModel.value : undefined,
+      routing_strategy: selectedRoutingStrategy.value,
     })
 
     const contentType = response.headers.get('content-type') || ''
