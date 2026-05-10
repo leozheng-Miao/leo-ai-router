@@ -38,4 +38,14 @@ class HealthCheckServiceImplTest {
 
         assertEquals("https://dashscope.aliyuncs.com/compatible-mode/models", service.buildHealthCheckUrl(provider));
     }
+
+    @Test
+    void shouldBuildGeminiHealthCheckUrl() {
+        ModelProvider provider = ModelProvider.builder()
+                .providerName("gemini")
+                .baseUrl("https://generativelanguage.googleapis.com")
+                .build();
+
+        assertEquals("https://generativelanguage.googleapis.com/v1beta/models", service.buildHealthCheckUrl(provider));
+    }
 }

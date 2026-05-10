@@ -43,19 +43,22 @@
 
           <div class="config-grid">
             <a-form-item label="尺寸">
-              <a-select v-model:value="form.size">
+              <a-select v-model:value="form.size" :disabled="isGeminiImageModel">
                 <a-select-option v-for="item in sizeOptions" :key="item" :value="item">
                   {{ item }}
                 </a-select-option>
               </a-select>
             </a-form-item>
             <a-form-item label="质量">
-              <a-select v-model:value="form.quality">
+              <a-select v-model:value="form.quality" :disabled="isGeminiImageModel">
                 <a-select-option value="low">low</a-select-option>
                 <a-select-option value="medium">medium</a-select-option>
                 <a-select-option value="high">high</a-select-option>
               </a-select>
             </a-form-item>
+          </div>
+          <div v-if="isGeminiImageModel" class="config-hint">
+            Gemini 图片模型当前不使用尺寸和质量参数，服务端会按模型默认策略生成单图，并以 Base64 结果返回。
           </div>
 
           <div class="estimate-box">
@@ -238,12 +241,20 @@ const selectedModel = computed(() =>
   imageModels.value.find((item) => item.modelKey === form.model),
 )
 
+const isGeminiImageModel = computed(() => {
+  const providerName = selectedModel.value?.providerName?.toLowerCase?.() ?? ''
+  return providerName === 'gemini' || providerName === 'google'
+})
+
 const sizeOptions = computed(() => {
   if (selectedModel.value?.modelKey === 'gpt-image-2') {
     return openAiImage2Sizes
   }
   if (selectedModel.value?.modelKey === 'gpt-image-1.5') {
     return openAiImage15Sizes
+  }
+  if (isGeminiImageModel.value) {
+    return ['1024x1024']
   }
   return defaultImageSizes
 })
@@ -300,6 +311,11 @@ watch(selectedModel, (model) => {
     form.size = options[0]
   }
   if (!model) return
+  if (isGeminiImageModel.value) {
+    form.size = '1024x1024'
+    form.quality = 'medium'
+    return
+  }
   if (form.quality !== 'low' && form.quality !== 'medium' && form.quality !== 'high') {
     form.quality = 'medium'
   }
@@ -472,6 +488,7 @@ onMounted(() => {
 .model-meta { margin-top: 10px; display: flex; justify-content: space-between; gap: 12px; color: #64748b; font-size: 13px; }
 .model-price { color: #ea580c; font-weight: 700; }
 .config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.config-hint { margin-top: -2px; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: #f8fafc; color: #64748b; font-size: 12px; line-height: 1.7; border: 1px dashed #cbd5e1; }
 .estimate-box { margin-top: 10px; padding: 16px 18px; border-radius: 18px; background: linear-gradient(135deg, #0f172a, #1d4ed8); color: #fff; }
 .estimate-label { font-size: 13px; color: rgba(255,255,255,0.72); }
 .estimate-value { margin-top: 8px; font-size: 34px; font-weight: 700; }

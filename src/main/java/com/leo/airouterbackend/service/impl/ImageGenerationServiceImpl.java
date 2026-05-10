@@ -87,7 +87,7 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
 
         // 设置默认值
         String size = StrUtil.isNotBlank(request.getSize()) ? request.getSize() : DEFAULT_SIZE;
-        int n = DEFAULT_N;
+        int n = request.getN() != null && request.getN() > 0 ? request.getN() : DEFAULT_N;
         Model model = resolveImageModel(request.getModel());
         if (model == null || !"image".equals(model.getModelType())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型不存在或不是图片生成模型");
@@ -104,6 +104,7 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
 
         try {
             request.setSize(size);
+            request.setN(n);
             ImageModelAdapter imageModelAdapter = imageModelAdapterFactory.getAdapter(modelProvider.getProviderName());
             ImageGenerationResponse response = imageModelAdapter.generate(model, modelProvider, request, n);
 

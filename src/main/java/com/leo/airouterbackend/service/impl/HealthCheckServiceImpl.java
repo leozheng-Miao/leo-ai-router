@@ -12,6 +12,7 @@ import com.leo.airouterbackend.model.enums.ProviderStatusEnum;
 import com.leo.airouterbackend.service.HealthCheckService;
 import com.leo.airouterbackend.service.ModelProviderService;
 import com.leo.airouterbackend.service.ModelService;
+import com.leo.airouterbackend.util.GeminiProviderUtils;
 import com.leo.airouterbackend.util.OpenAiProviderUtils;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
@@ -430,11 +431,15 @@ public class HealthCheckServiceImpl implements HealthCheckService {
             String apiKey = provider.getApiKey();
             String url = buildHealthCheckUrl(provider);
 
-            HttpRequest request = HttpRequest.get(url)
-                    .header("Authorization", "Bearer " + apiKey)
-                    .timeout(HEALTH_CHECK_TIMEOUT);
+            HttpRequest request = HttpRequest.get(url).timeout(HEALTH_CHECK_TIMEOUT);
+            if (GeminiProviderUtils.isGeminiProvider(provider.getProviderName())) {
+                request.header("x-goog-api-key", apiKey);
+            } else {
+                request.header("Authorization", "Bearer " + apiKey);
+            }
 
-            if (OpenAiProviderUtils.isOpenAiProvider(provider.getProviderName())) {
+            if (OpenAiProviderUtils.isOpenAiProvider(provider.getProviderName())
+                    || GeminiProviderUtils.isGeminiProvider(provider.getProviderName())) {
                 OpenAiProviderUtils.OpenAiTransportConfig transportConfig =
                         OpenAiProviderUtils.resolveTransportConfig(provider);
                 request.setConnectionTimeout(transportConfig.connectTimeoutMillis());
@@ -469,6 +474,9 @@ public class HealthCheckServiceImpl implements HealthCheckService {
         String baseUrl = OpenAiProviderUtils.trimTrailingSlash(provider.getBaseUrl());
         if (OpenAiProviderUtils.isOpenAiProvider(provider.getProviderName())) {
             return OpenAiProviderUtils.buildModelsUrl(baseUrl);
+        }
+        if (GeminiProviderUtils.isGeminiProvider(provider.getProviderName())) {
+            return GeminiProviderUtils.buildModelsUrl(baseUrl);
         }
         return baseUrl + "/models";
     }

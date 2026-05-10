@@ -14,6 +14,7 @@ class ImageModelAdapterFactoryTest {
         ImageModelAdapterFactory factory = new ImageModelAdapterFactory();
         ReflectionTestUtils.setField(factory, "adapters", List.of(
                 new OpenAiImageAdapter(),
+                new GeminiImageAdapter(),
                 new DashscopeImageAdapter()
         ));
 
@@ -26,10 +27,24 @@ class ImageModelAdapterFactoryTest {
         ImageModelAdapterFactory factory = new ImageModelAdapterFactory();
         ReflectionTestUtils.setField(factory, "adapters", List.of(
                 new OpenAiImageAdapter(),
+                new GeminiImageAdapter(),
                 new DashscopeImageAdapter()
         ));
 
         ImageModelAdapter adapter = factory.getAdapter("qwen");
         assertInstanceOf(DashscopeImageAdapter.class, adapter);
+    }
+
+    @Test
+    void shouldReturnGeminiAdapterForGeminiProvider() {
+        ImageModelAdapterFactory factory = new ImageModelAdapterFactory();
+        ReflectionTestUtils.setField(factory, "adapters", List.of(
+                new OpenAiImageAdapter(),
+                new GeminiImageAdapter(),
+                new DashscopeImageAdapter()
+        ));
+
+        ImageModelAdapter adapter = factory.getAdapter("gemini");
+        assertInstanceOf(GeminiImageAdapter.class, adapter);
     }
 }

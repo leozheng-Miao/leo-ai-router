@@ -38,7 +38,7 @@ public class ModelProvider implements Serializable {
     private Long id;
 
     /**
-     * 提供者名称（如：qwen/zhipu/deepseek/openai）
+     * 提供者名称（如：qwen/zhipu/deepseek/openai/gemini）
      */
     @Column("providerName")
     private String providerName;

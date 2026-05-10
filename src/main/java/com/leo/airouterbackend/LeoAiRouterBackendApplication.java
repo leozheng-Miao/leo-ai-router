@@ -11,6 +11,9 @@ import com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeVideoAutoConfigurat
 import com.leo.airouterbackend.config.MailProperties;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.model.deepseek.autoconfigure.DeepSeekChatAutoConfiguration;
+import org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiChatAutoConfiguration;
+import org.springframework.ai.model.google.genai.autoconfigure.embedding.GoogleGenAiEmbeddingConnectionAutoConfiguration;
+import org.springframework.ai.model.google.genai.autoconfigure.embedding.GoogleGenAiTextEmbeddingAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
@@ -32,6 +35,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         OpenAiAudioSpeechAutoConfiguration.class,
         OpenAiAudioTranscriptionAutoConfiguration.class,
         OpenAiModerationAutoConfiguration.class,
+        // 排除 Gemini 自动配置
+        GoogleGenAiChatAutoConfiguration.class,
+        GoogleGenAiEmbeddingConnectionAutoConfiguration.class,
+        GoogleGenAiTextEmbeddingAutoConfiguration.class,
         // 排除 DeepSeek 自动配置
         DeepSeekChatAutoConfiguration.class,
         // 排除 DashScope 自动配置

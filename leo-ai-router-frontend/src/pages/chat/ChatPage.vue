@@ -344,6 +344,8 @@ const providerColorMap: Record<string, string> = {
   deepseek: 'blue',
   openai: 'purple',
   gpt: 'purple',
+  gemini: 'gold',
+  google: 'gold',
 }
 
 // ───── 状态 ─────
@@ -457,9 +459,30 @@ const formatNum = (n: number) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : Stri
 
 const now = () => new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
+const escapeHtml = (text: string) => {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+const markdownRenderer = new marked.Renderer()
+markdownRenderer.code = (token: any) => {
+  const content = typeof token?.text === 'string' ? token.text : ''
+  const language = typeof token?.lang === 'string' && token.lang ? ` language-${token.lang}` : ''
+  return `<pre class="code-block"><code class="${language.trim()}">${escapeHtml(content)}</code></pre>`
+}
+markdownRenderer.codespan = (token: any) => {
+  const content = typeof token?.text === 'string' ? token.text : ''
+  return `<code class="inline-code">${escapeHtml(content)}</code>`
+}
+
 marked.setOptions({
   gfm: true,
   breaks: true,
+  renderer: markdownRenderer,
 })
 
 const sanitizeHtml = (html: string) => {
@@ -471,7 +494,10 @@ const sanitizeHtml = (html: string) => {
 }
 
 const renderContent = (text: string) => {
-  return sanitizeHtml(marked.parse(text) as string)
+  const html = marked.parse(text) as string
+  return sanitizeHtml(
+    html.replace(/<table>/g, '<div class="table-wrapper"><table>').replace(/<\/table>/g, '</table></div>'),
+  )
 }
 
 const copyText = (text: string) => {
@@ -516,11 +542,49 @@ const resolveErrorMessage = (payload: unknown, fallback = '请求失败') => {
   return fallback
 }
 
-const parseStreamLine = (rawLine: string) => {
-  if (!rawLine.startsWith('data:')) {
+const normalizeStreamChunk = (text: string) => {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+}
+
+const stripNestedDataPrefix = (text: string) => {
+  let normalized = text
+  while (normalized.startsWith('data:')) {
+    normalized = normalized.slice(5).replace(/^\s/, '')
+  }
+  return normalized.replace(/(^|\n)data:\s?/g, '$1')
+}
+
+const extractSseEvents = (rawBuffer: string) => {
+  const normalized = normalizeStreamChunk(rawBuffer)
+  const events: string[] = []
+  let cursor = 0
+
+  while (true) {
+    const boundary = normalized.indexOf('\n\n', cursor)
+    if (boundary < 0) {
+      break
+    }
+    events.push(normalized.slice(cursor, boundary))
+    cursor = boundary + 2
+  }
+
+  return {
+    events,
+    rest: normalized.slice(cursor),
+  }
+}
+
+const parseSseEvent = (rawEvent: string) => {
+  const dataLines = rawEvent
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).replace(/^\s/, ''))
+
+  if (dataLines.length === 0) {
     return { done: false, text: '' }
   }
-  const text = rawLine.slice(5).replace(/^\s/, '')
+
+  const text = stripNestedDataPrefix(dataLines.join('\n'))
   if (text.trim() === '[DONE]') {
     return { done: true, text: '' }
   }
@@ -813,24 +877,6 @@ const handleDeleteConversation = async (conversationId?: number) => {
   })
 }
 
-// ───── 加载数据 ─────
-// const loadModels = async () => {
-//   // 使用固定模型列表（与后端 db.sql 一致）
-//   models.value = [
-//     { label: 'Qwen Plus', value: 'qwen-plus', provider: '通义千问', tagColor: 'orange' },
-//     { label: 'Qwen Max', value: 'qwen-max', provider: '通义千问', tagColor: 'orange' },
-//     { label: 'Qwen Turbo', value: 'qwen-turbo', provider: '通义千问', tagColor: 'orange' },
-//     { label: 'GLM-4.7', value: 'glm-4.7', provider: '智谱AI', tagColor: 'green' },
-//     { label: 'GLM-4.7 Flash', value: 'glm-4.7-flash', provider: '智谱AI', tagColor: 'green' },
-//     { label: 'DeepSeek Chat', value: 'deepseek-chat', provider: 'DeepSeek', tagColor: 'blue' },
-//     {
-//       label: 'DeepSeek Reasoner',
-//       value: 'deepseek-reasoner',
-//       provider: 'DeepSeek',
-//       tagColor: 'blue',
-//     },
-//   ]
-// }
 
 const loadModels = async () => {
   modelsLoading.value = true
@@ -950,11 +996,11 @@ const sendMessageInternal = async () => {
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
+      const parsed = extractSseEvents(buffer)
+      buffer = parsed.rest
 
-      for (const line of lines) {
-        const payload = parseStreamLine(line)
+      for (const eventText of parsed.events) {
+        const payload = parseSseEvent(eventText)
         if (!payload.text && !payload.done) {
           continue
         }
@@ -973,14 +1019,16 @@ const sendMessageInternal = async () => {
       if (streamDone) break
     }
 
-    const lastPayload = parseStreamLine(buffer)
-    if (lastPayload.done) {
-      streamDone = true
-    } else if (lastPayload.text) {
-      streamingContent.value += lastPayload.text
-      updateAssistantMessage(aiMsgIndex, {
-        content: streamingContent.value,
-      })
+    if (buffer.trim()) {
+      const parsed = parseSseEvent(buffer)
+      if (parsed.done) {
+        streamDone = true
+      } else if (parsed.text) {
+        streamingContent.value += parsed.text
+        updateAssistantMessage(aiMsgIndex, {
+          content: streamingContent.value,
+        })
+      }
     }
 
     totalTokens = estimateTokenCount(`${streamingReasoning.value}\n${streamingContent.value}`)
@@ -1466,6 +1514,15 @@ watch(selectedRoutingStrategy, (value) => {
   margin: 0 0 10px;
 }
 
+:deep(.msg-content h1),
+:deep(.msg-content h2),
+:deep(.msg-content h3),
+:deep(.msg-content h4) {
+  margin: 16px 0 10px;
+  line-height: 1.4;
+  color: #111827;
+}
+
 :deep(.msg-content ul),
 :deep(.msg-content ol) {
   margin: 8px 0 12px 20px;
@@ -1492,6 +1549,14 @@ watch(selectedRoutingStrategy, (value) => {
   white-space: pre;
 }
 
+:deep(.code-block code) {
+  display: block;
+  color: inherit;
+  background: transparent;
+  font-family: inherit;
+  line-height: 1.65;
+}
+
 :deep(.inline-code) {
   background: rgba(0, 0, 0, 0.08);
   border-radius: 4px;
@@ -1508,11 +1573,17 @@ watch(selectedRoutingStrategy, (value) => {
   color: #475569;
 }
 
+:deep(.table-wrapper) {
+  width: 100%;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
 :deep(.msg-content table) {
   width: 100%;
   border-collapse: collapse;
-  margin: 10px 0;
   font-size: 13px;
+  min-width: 420px;
 }
 
 :deep(.msg-content th),
@@ -1524,6 +1595,12 @@ watch(selectedRoutingStrategy, (value) => {
 
 :deep(.msg-content th) {
   background: #f8fafc;
+}
+
+:deep(.msg-content hr) {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 14px 0;
 }
 
 .bubble-user :deep(.inline-code) {

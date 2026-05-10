@@ -107,7 +107,7 @@
               <a-input
                 v-model:value="form.providerName"
                 :disabled="Boolean(editingId)"
-                placeholder="如 openai / deepseek / qwen / zhipu"
+                placeholder="如 openai / gemini / deepseek / qwen / zhipu"
               />
             </a-form-item>
           </a-col>

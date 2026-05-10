@@ -125,13 +125,13 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
                                 return Flux.empty();
                             }
                             assistantContent.append(text);
-                            return Flux.just("data: " + text + "\n\n");
+                            return Flux.just(text);
                         })
                         .concatWith(Flux.defer(() -> {
                             saveMessage(conversationId, userId, ROLE_ASSISTANT, assistantContent.toString(), mode);
                             assistantPersisted.set(true);
                             conversationService.updateAfterMessage(conversation, userContent);
-                            return Flux.just("data: [DONE]\n\n");
+                            return Flux.just("[DONE]");
                         }))
                         .doOnError(error -> persistStreamFailureIfNecessary(
                                 assistantPersisted,
