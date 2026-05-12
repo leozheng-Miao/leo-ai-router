@@ -154,7 +154,38 @@
                 </a-button>
               </a-form>
             </a-tab-pane>
+
+            <a-tab-pane key="phone" tab="手机号">
+              <a-form :model="phoneForm" layout="vertical" @finish="handlePhoneLogin">
+                <a-form-item
+                  name="phone"
+                  :rules="[
+                    { required: true, message: '请输入手机号' },
+                    { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确' },
+                  ]"
+                >
+                  <a-input v-model:value="phoneForm.phone" placeholder="手机号" size="large" class="auth-input">
+                    <template #prefix><UserOutlined class="input-prefix-icon" /></template>
+                  </a-input>
+                </a-form-item>
+                <a-form-item name="code" :rules="[{ required: true, message: '请输入验证码' }]">
+                  <div class="code-row">
+                    <a-input v-model:value="phoneForm.code" placeholder="6 位验证码" size="large" class="auth-input" />
+                    <a-button size="large" class="code-btn" :loading="phoneCodeLoading" :disabled="phoneCountdown.isCounting" @click.prevent="handleSendPhoneCode">
+                      {{ phoneCountdown.isCounting ? `${phoneCountdown.countdown}s` : '发送验证码' }}
+                    </a-button>
+                  </div>
+                </a-form-item>
+                <a-button type="primary" html-type="submit" block size="large" class="submit-btn" :loading="phoneLoading">
+                  登录
+                </a-button>
+              </a-form>
+            </a-tab-pane>
           </a-tabs>
+
+          <a-button block size="large" class="wechat-btn" :loading="wechatLoading" @click="handleWechatLogin">
+            微信扫码登录
+          </a-button>
         </div>
       </div>
     </div>
@@ -223,6 +254,37 @@
         </a-button>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="setPasswordModalVisible"
+      title="设置登录密码"
+      ok-text="确认密码"
+      cancel-text="稍后设置"
+      :confirm-loading="setPasswordLoading"
+      :mask-closable="false"
+      @ok="handleSetPassword"
+      @cancel="enterSite"
+    >
+      <a-form :model="setPasswordForm" layout="vertical">
+        <a-form-item
+          label="登录密码"
+          :rules="[{ required: true }, { min: 8, message: '至少 8 位' }]"
+        >
+          <a-input-password
+            v-model:value="setPasswordForm.userPassword"
+            placeholder="设置账号密码"
+            size="large"
+          />
+        </a-form-item>
+        <a-form-item label="确认密码">
+          <a-input-password
+            v-model:value="setPasswordForm.checkPassword"
+            placeholder="再次输入密码"
+            size="large"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -232,9 +294,10 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined, MailOutlined, CheckCircleFilled } from '@ant-design/icons-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
-import { userLogin, userLoginByEmail, resetPassword } from '@/api/userController'
+import { getWechatOAuthUrl, resetPassword, sendPhoneCode, setPassword, userLogin, userLoginByEmail, userLoginByPhone } from '@/api/userController'
 import { useEmailCodeCountdown } from '@/composables/useEmailCodeCountdown'
 import { requestSendEmailCode } from '@/utils/sendEmailVerificationCode'
+import { saveAuthTokens } from '@/utils/authToken'
 
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
@@ -242,15 +305,23 @@ const loginUserStore = useLoginUserStore()
 const loginTab = ref('password')
 const pwdLoading = ref(false)
 const emailLoading = ref(false)
+const phoneLoading = ref(false)
 const sendCodeLoading = ref(false)
+const phoneCodeLoading = ref(false)
 const resetSendLoading = ref(false)
 const resetModalVisible = ref(false)
+const wechatLoading = ref(false)
+const setPasswordModalVisible = ref(false)
+const setPasswordLoading = ref(false)
 
 const pwdForm = reactive<API.UserLoginRequest>({ userAccount: '', userPassword: '' })
 const emailForm = reactive({ email: '', code: '' })
+const phoneForm = reactive({ phone: '', code: '' })
 const resetForm = reactive({ email: '', code: '', newPassword: '', checkPassword: '' })
+const setPasswordForm = reactive({ userPassword: '', checkPassword: '' })
 
 const emailCountdown = useEmailCodeCountdown()
+const phoneCountdown = useEmailCodeCountdown()
 const resetCountdown = useEmailCodeCountdown()
 
 const leftFeatures = [
@@ -270,9 +341,9 @@ const handlePwdLogin = async (values: API.UserLoginRequest) => {
   try {
     const res = await userLogin(values)
     if (res.data.code === 0 && res.data.data) {
-      await loginUserStore.fetchLoginUser()
+      const needSetPassword = handleLoginSuccess(res.data.data)
       message.success('登录成功')
-      router.push({ path: '/', replace: true })
+      if (!needSetPassword) enterSite()
     } else {
       message.error('登录失败：' + res.data.message)
     }
@@ -290,9 +361,9 @@ const handleEmailLogin = async () => {
   try {
     const res = await userLoginByEmail({ email: emailForm.email.trim(), code: emailForm.code })
     if (res.data.code === 0 && res.data.data) {
-      await loginUserStore.fetchLoginUser()
+      const needSetPassword = handleLoginSuccess(res.data.data)
       message.success('登录成功')
-      router.push({ path: '/', replace: true })
+      if (!needSetPassword) enterSite()
     } else {
       message.error('登录失败：' + (res.data.message ?? ''))
     }
@@ -300,6 +371,108 @@ const handleEmailLogin = async () => {
     message.error('网络错误，请稍后重试')
   } finally {
     emailLoading.value = false
+  }
+}
+
+const handleSendPhoneCode = async () => {
+  if (!/^1[3-9]\d{9}$/.test(phoneForm.phone)) {
+    message.warning('请输入正确的手机号')
+    return
+  }
+  phoneCodeLoading.value = true
+  try {
+    const res = await sendPhoneCode({ phone: phoneForm.phone.trim() })
+    if (res.data.code === 0) {
+      const data = res.data.data
+      if (data?.mockMode && data.devCode) {
+        phoneForm.code = data.devCode
+        message.info(`本地开发验证码：${data.devCode}`)
+      } else {
+        message.success(data?.message ?? '验证码已发送')
+      }
+      phoneCountdown.start()
+    } else {
+      message.error(res.data.message ?? '发送失败')
+    }
+  } finally {
+    phoneCodeLoading.value = false
+  }
+}
+
+const handlePhoneLogin = async () => {
+  phoneLoading.value = true
+  try {
+    const res = await userLoginByPhone({ phone: phoneForm.phone.trim(), code: phoneForm.code })
+    if (res.data.code === 0 && res.data.data) {
+      const needSetPassword = handleLoginSuccess(res.data.data)
+      message.success('登录成功')
+      if (!needSetPassword) enterSite()
+    } else {
+      message.error(res.data.message ?? '登录失败')
+    }
+  } finally {
+    phoneLoading.value = false
+  }
+}
+
+const handleWechatLogin = async () => {
+  wechatLoading.value = true
+  try {
+    const res = await getWechatOAuthUrl()
+    if (res.data.code === 0 && res.data.data?.enabled && res.data.data.url) {
+      window.location.href = res.data.data.url
+    } else {
+      message.warning(res.data.data?.message ?? res.data.message ?? '微信登录暂不可用')
+    }
+  } finally {
+    wechatLoading.value = false
+  }
+}
+
+const handleLoginSuccess = (data: API.AuthLoginVO) => {
+  saveAuthTokens(data.accessToken, data.refreshToken)
+  if (data.loginUser) {
+    loginUserStore.setLoginUser(data.loginUser)
+  }
+  if (data.loginUser?.needSetPassword) {
+    setPasswordForm.userPassword = ''
+    setPasswordForm.checkPassword = ''
+    setPasswordModalVisible.value = true
+    return true
+  }
+  return false
+}
+
+const enterSite = () => {
+  setPasswordModalVisible.value = false
+  router.push({ path: '/', replace: true })
+}
+
+const handleSetPassword = async () => {
+  if (!setPasswordForm.userPassword || setPasswordForm.userPassword.length < 8) {
+    message.warning('密码长度不能小于8位')
+    return
+  }
+  if (setPasswordForm.userPassword !== setPasswordForm.checkPassword) {
+    message.warning('两次密码不一致')
+    return
+  }
+  setPasswordLoading.value = true
+  try {
+    const res = await setPassword({ ...setPasswordForm })
+    if (res.data.code === 0) {
+      loginUserStore.setLoginUser({
+        ...loginUserStore.loginUser,
+        hasPassword: true,
+        needSetPassword: false,
+      })
+      message.success('密码设置成功')
+      enterSite()
+    } else {
+      message.error(res.data.message ?? '密码设置失败')
+    }
+  } finally {
+    setPasswordLoading.value = false
   }
 }
 
@@ -485,6 +658,12 @@ const handleReset = async () => {
 
 .submit-btn:hover {
   opacity: 0.9;
+}
+
+.wechat-btn {
+  margin-top: 14px;
+  border-radius: 9px;
+  height: 42px;
 }
 
 .code-row {

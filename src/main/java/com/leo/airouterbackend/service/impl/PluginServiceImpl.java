@@ -1,6 +1,7 @@
 package com.leo.airouterbackend.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import com.leo.airouterbackend.constant.PermissionConstant;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
 import com.leo.airouterbackend.mapper.PluginConfigMapper;
@@ -15,6 +16,8 @@ import com.leo.airouterbackend.plugin.PluginContext;
 import com.leo.airouterbackend.plugin.PluginManager;
 import com.leo.airouterbackend.plugin.PluginResult;
 import com.leo.airouterbackend.service.PluginService;
+import com.leo.airouterbackend.service.RbacService;
+import com.leo.airouterbackend.service.UsageLimitService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.PostConstruct;
@@ -37,6 +40,12 @@ public class PluginServiceImpl extends ServiceImpl<PluginConfigMapper, PluginCon
     @Resource
     private ApplicationContext applicationContext;
 
+    @Resource
+    private RbacService rbacService;
+
+    @Resource
+    private UsageLimitService usageLimitService;
+
     @PostConstruct
     public void init() {
         initPlugins();
@@ -58,6 +67,14 @@ public class PluginServiceImpl extends ServiceImpl<PluginConfigMapper, PluginCon
                 .orderBy("priority", false));
         return pluginConfigs.stream()
                 .map(this::convertToVO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<PluginConfigVO> listAvailablePlugins(Long userId) {
+        return listEnabledPlugins().stream()
+                .filter(plugin -> userId != null
+                        && rbacService.hasPermission(userId, PermissionConstant.PLUGIN_USE_PREFIX + plugin.getPluginKey()))
                 .collect(Collectors.toList());
     }
 
@@ -146,6 +163,13 @@ public class PluginServiceImpl extends ServiceImpl<PluginConfigMapper, PluginCon
         String pluginKey = request.getPluginKey();
         if (pluginKey == null || pluginKey.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "插件标识不能为空");
+        }
+        if (userId != null) {
+            if (!rbacService.hasPermission(userId, PermissionConstant.PLUGIN_USE)
+                    || !rbacService.hasPermission(userId, PermissionConstant.PLUGIN_USE_PREFIX + pluginKey)) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "当前角色无权使用该插件");
+            }
+            usageLimitService.checkAndRecordPlugin(userId);
         }
 
         // 构建插件上下文

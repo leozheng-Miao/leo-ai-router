@@ -3,6 +3,7 @@ package com.leo.airouterbackend.controller;
 import com.leo.airouterbackend.annotation.AuthCheck;
 import com.leo.airouterbackend.common.BaseResponse;
 import com.leo.airouterbackend.common.ResultUtils;
+import com.leo.airouterbackend.constant.PermissionConstant;
 import com.leo.airouterbackend.constant.UserConstant;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
@@ -42,7 +43,7 @@ public class PluginController {
      */
     @GetMapping("/list")
     @Operation(summary = "获取所有插件列表")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE, mustPermissions = PermissionConstant.ADMIN_PLUGIN)
     public BaseResponse<List<PluginConfigVO>> listPlugins() {
         List<PluginConfigVO> pluginList = pluginService.listAllPlugins();
         return ResultUtils.success(pluginList);
@@ -56,6 +57,14 @@ public class PluginController {
     public BaseResponse<List<PluginConfigVO>> listEnabledPlugins() {
         List<PluginConfigVO> pluginList = pluginService.listEnabledPlugins();
         return ResultUtils.success(pluginList);
+    }
+
+    @GetMapping("/list/available")
+    @Operation(summary = "获取当前用户可用插件列表")
+    @AuthCheck(mustRole = UserConstant.DEFAULT_ROLE)
+    public BaseResponse<List<PluginConfigVO>> listAvailablePlugins(HttpServletRequest httpRequest) {
+        User loginUser = userService.getLoginUser(httpRequest);
+        return ResultUtils.success(pluginService.listAvailablePlugins(loginUser.getId()));
     }
 
     /**
@@ -79,7 +88,7 @@ public class PluginController {
      */
     @PostMapping("/update")
     @Operation(summary = "更新插件配置")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE, mustPermissions = PermissionConstant.ADMIN_PLUGIN)
     public BaseResponse<Boolean> updatePlugin(@RequestBody PluginUpdateRequest request) {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -93,7 +102,7 @@ public class PluginController {
      */
     @PostMapping("/enable")
     @Operation(summary = "启用插件")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE, mustPermissions = PermissionConstant.ADMIN_PLUGIN)
     public BaseResponse<Boolean> enablePlugin(@RequestParam String pluginKey) {
         if (pluginKey == null || pluginKey.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "插件标识不能为空");
@@ -107,7 +116,7 @@ public class PluginController {
      */
     @PostMapping("/disable")
     @Operation(summary = "禁用插件")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE, mustPermissions = PermissionConstant.ADMIN_PLUGIN)
     public BaseResponse<Boolean> disablePlugin(@RequestParam String pluginKey) {
         if (pluginKey == null || pluginKey.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "插件标识不能为空");
@@ -140,7 +149,7 @@ public class PluginController {
      */
     @PostMapping("/reload")
     @Operation(summary = "重新加载插件")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE, mustPermissions = PermissionConstant.ADMIN_PLUGIN)
     public BaseResponse<Boolean> reloadPlugin(@RequestParam String pluginKey) {
         if (pluginKey == null || pluginKey.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "插件标识不能为空");
@@ -154,7 +163,7 @@ public class PluginController {
      */
     @PostMapping("/reload/all")
     @Operation(summary = "重新加载所有插件")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE, mustPermissions = PermissionConstant.ADMIN_PLUGIN)
     public BaseResponse<Boolean> reloadAllPlugins() {
         pluginService.initPlugins();
         return ResultUtils.success(true);

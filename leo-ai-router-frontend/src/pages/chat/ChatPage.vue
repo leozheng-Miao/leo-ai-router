@@ -275,7 +275,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons-vue'
-import { listActiveModels } from '@/api/modelController'
+import { listAvailableModels } from '@/api/modelController'
 import {
   createConversation,
   deleteConversation,
@@ -881,7 +881,7 @@ const handleDeleteConversation = async (conversationId?: number) => {
 const loadModels = async () => {
   modelsLoading.value = true
   try {
-    const res = await listActiveModels()
+    const res = await listAvailableModels()
     if (res.data.code === 0 && res.data.data) {
       models.value = res.data.data
         .filter((m) => m.modelType === 'chat')

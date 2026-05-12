@@ -93,6 +93,107 @@ declare namespace API {
     message?: string
   }
 
+  type AuthLoginVO = {
+    accessToken?: string
+    refreshToken?: string
+    tokenType?: string
+    expiresIn?: number
+    loginUser?: LoginUserVO
+  }
+
+  type BaseResponseAuthLoginVO = {
+    code?: number
+    data?: AuthLoginVO
+    message?: string
+  }
+
+  type WechatOAuthUrlVO = {
+    url?: string
+    state?: string
+    enabled?: boolean
+    message?: string
+  }
+
+  type BaseResponseWechatOAuthUrlVO = {
+    code?: number
+    data?: WechatOAuthUrlVO
+    message?: string
+  }
+
+  type PhoneCodeRequest = {
+    phone?: string
+  }
+
+  type PhoneCodeVO = {
+    sent?: boolean
+    mockMode?: boolean
+    devCode?: string
+    message?: string
+    expireMinutes?: number
+    coolDownSeconds?: number
+  }
+
+  type BaseResponsePhoneCodeVO = {
+    code?: number
+    data?: PhoneCodeVO
+    message?: string
+  }
+
+  type PhoneLoginRequest = {
+    phone?: string
+    code?: string
+  }
+
+  type PhoneBindRequest = {
+    phone?: string
+    code?: string
+  }
+
+  type RefreshTokenRequest = {
+    refreshToken?: string
+  }
+
+  type Role = {
+    id?: number
+    roleCode?: string
+    roleName?: string
+    description?: string
+    status?: string
+    priority?: number
+  }
+
+  type Permission = {
+    id?: number
+    permissionCode?: string
+    permissionName?: string
+    resourceType?: string
+    resourceKey?: string
+    description?: string
+    status?: string
+  }
+
+  type BaseResponseListRole = {
+    code?: number
+    data?: Role[]
+    message?: string
+  }
+
+  type BaseResponseListPermission = {
+    code?: number
+    data?: Permission[]
+    message?: string
+  }
+
+  type AssignUserRolesRequest = {
+    userId?: number
+    roleCodes?: string[]
+  }
+
+  type RolePermissionRequest = {
+    roleCode?: string
+    permissionCodes?: string[]
+  }
+
   type BaseResponseLong = {
     code?: number
     data?: number
@@ -406,6 +507,8 @@ declare namespace API {
     userAccount?: string
     userName?: string
     userEmail?: string
+    userPhone?: string
+    phoneVerified?: number
     userAvatar?: string
     userProfile?: string
     userRole?: string
@@ -417,6 +520,9 @@ declare namespace API {
     usedTokens?: number
     userStatus?: string
     balance?: number
+    tokenVersion?: number
+    hasPassword?: boolean
+    needSetPassword?: boolean
   }
 
   type ModelAddRequest = {
@@ -720,6 +826,17 @@ declare namespace API {
     checkPassword: string
   }
 
+  type UserSetPasswordRequest = {
+    userPassword: string
+    checkPassword: string
+  }
+
+  type UserProfileUpdateRequest = {
+    userName?: string
+    userAvatar?: string
+    userProfile?: string
+  }
+
   type resetUserQuotaParams = {
     userId: number
   }
@@ -738,6 +855,8 @@ declare namespace API {
     id?: number
     userAccount?: string
     userEmail?: string
+    userPhone?: string
+    phoneVerified?: number
     userPassword?: string
     userName?: string
     userAvatar?: string
@@ -751,6 +870,7 @@ declare namespace API {
     usedTokens?: number
     userStatus?: string
     balance?: number
+    tokenVersion?: number
   }
 
   type UserAddRequest = {
@@ -778,6 +898,11 @@ declare namespace API {
   }
 
   type UserEmailLoginRequest = {
+    email: string
+    code: string
+  }
+
+  type UserEmailBindRequest = {
     email: string
     code: string
   }
@@ -858,6 +983,8 @@ declare namespace API {
     userAccount?: string
     userName?: string
     userEmail?: string
+    userPhone?: string
+    phoneVerified?: number
     userAvatar?: string
     userProfile?: string
     userRole?: string
@@ -866,5 +993,8 @@ declare namespace API {
     usedTokens?: number
     userStatus?: string
     balance?: number
+    tokenVersion?: number
+    hasPassword?: boolean
+    needSetPassword?: boolean
   }
 }

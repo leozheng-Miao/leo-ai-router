@@ -15,8 +15,7 @@
           <a-form-item label="账号"><a-input v-model:value="query.userAccount" allow-clear /></a-form-item>
           <a-form-item label="角色">
             <a-select v-model:value="query.userRole" allow-clear placeholder="全部角色">
-              <a-select-option value="admin">admin</a-select-option>
-              <a-select-option value="user">user</a-select-option>
+              <a-select-option v-for="role in roles" :key="role.roleCode" :value="role.roleCode">{{ role.roleName || role.roleCode }}</a-select-option>
             </a-select>
           </a-form-item>
         </div>
@@ -73,8 +72,7 @@
         <a-form-item label="账号" required v-if="!editingId"><a-input v-model:value="form.userAccount" /></a-form-item>
         <a-form-item label="角色">
           <a-select v-model:value="form.userRole">
-            <a-select-option value="user">user</a-select-option>
-            <a-select-option value="admin">admin</a-select-option>
+            <a-select-option v-for="role in roles" :key="role.roleCode" :value="role.roleCode">{{ role.roleName || role.roleCode }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="头像"><a-input v-model:value="form.userAvatar" /></a-form-item>
@@ -114,6 +112,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { addUser, disableUser, enableUser, getUserAnalysis, listUserVoByPage, resetUserQuota, setUserQuota, updateUser } from '@/api/userController'
+import { assignUserRoles, listRoles } from '@/api/rbacController'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -125,6 +124,7 @@ const editingId = ref<number>()
 const quotaUserId = ref<number>()
 const users = ref<API.UserVO[]>([])
 const analysis = ref<API.UserAnalysisVO>()
+const roles = ref<API.Role[]>([])
 
 const query = reactive<API.UserQueryRequest>({
   pageNum: 1,
@@ -188,6 +188,13 @@ const loadUsers = async () => {
   }
 }
 
+const loadRoles = async () => {
+  const res = await listRoles()
+  if (res.data.code === 0) {
+    roles.value = res.data.data ?? []
+  }
+}
+
 const resetForm = () => {
   editingId.value = undefined
   form.userName = ''
@@ -232,6 +239,9 @@ const handleSubmit = async () => {
     }
     const res = editingId.value ? await updateUser({ id: editingId.value, ...payload }) : await addUser(payload)
     if (res.data.code === 0) {
+      if (editingId.value && form.userRole) {
+        await assignUserRoles({ userId: editingId.value, roleCodes: [form.userRole] })
+      }
       message.success(editingId.value ? '用户更新成功' : '用户创建成功')
       editModalOpen.value = false
       await loadUsers()
@@ -319,6 +329,7 @@ const handleTableChange = (pag: { current: number; pageSize: number }) => {
 }
 
 onMounted(() => {
+  void loadRoles()
   void loadUsers()
 })
 </script>

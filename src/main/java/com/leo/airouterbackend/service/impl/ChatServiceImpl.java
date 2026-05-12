@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
+import com.leo.airouterbackend.constant.PermissionConstant;
 import com.leo.airouterbackend.matrics.AIMetricsCollector;
 import com.leo.airouterbackend.model.dto.chat.ChatMessage;
 import com.leo.airouterbackend.model.dto.chat.ChatRequest;
@@ -22,8 +23,10 @@ import com.leo.airouterbackend.service.ModelInvokeService;
 import com.leo.airouterbackend.service.ModelProviderService;
 import com.leo.airouterbackend.service.PluginService;
 import com.leo.airouterbackend.service.QuotaService;
+import com.leo.airouterbackend.service.RbacService;
 import com.leo.airouterbackend.service.RequestLogService;
 import com.leo.airouterbackend.service.RoutingService;
+import com.leo.airouterbackend.service.UsageLimitService;
 import com.leo.airouterbackend.service.UserProviderKeyService;
 import com.leo.airouterbackend.service.UserService;
 import jakarta.annotation.Resource;
@@ -60,6 +63,10 @@ public class ChatServiceImpl implements ChatService {
     private PluginService pluginService;
     @Resource
     private AIMetricsCollector aiMetricsCollector;
+    @Resource
+    private RbacService rbacService;
+    @Resource
+    private UsageLimitService usageLimitService;
     /**
      * 最大 Fallback 重试次数
      */
@@ -98,6 +105,7 @@ public class ChatServiceImpl implements ChatService {
 
         Model selectModel = routingService.selectModel(strategyType, "chat", requestModel);
         if (selectModel == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型");
+        checkChatPermission(userId, selectModel);
 
         // 检查用户是否配置了 BYOK（提前检查，避免不必要的余额检查）
         boolean willUseByok = false;
@@ -352,6 +360,7 @@ public class ChatServiceImpl implements ChatService {
             if (selectedModel == null) {
                 return Flux.error(new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型"));
             }
+            checkChatPermission(userId, selectedModel);
 
             // 获取提供者信息
             ModelProvider provider = modelProviderService.getById(selectedModel.getProviderId());
@@ -574,6 +583,17 @@ public class ChatServiceImpl implements ChatService {
                 .usage(usage)
                 .build();
 
+    }
+
+    private void checkChatPermission(Long userId, Model model) {
+        if (userId == null) {
+            return;
+        }
+        if (!rbacService.hasPermission(userId, PermissionConstant.CHAT_USE)
+                || !rbacService.hasPermission(userId, PermissionConstant.MODEL_USE_PREFIX + model.getModelKey())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "当前角色无权使用该模型");
+        }
+        usageLimitService.checkAndRecordChat(userId);
     }
 
     /**

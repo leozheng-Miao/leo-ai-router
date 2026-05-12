@@ -10,23 +10,38 @@ import com.leo.airouterbackend.constant.UserConstant;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
 import com.leo.airouterbackend.exception.ThrowUtils;
+import com.leo.airouterbackend.model.dto.auth.AuthLoginVO;
+import com.leo.airouterbackend.model.dto.auth.PhoneBindRequest;
+import com.leo.airouterbackend.model.dto.auth.PhoneCodeVO;
+import com.leo.airouterbackend.model.dto.auth.PhoneCodeRequest;
+import com.leo.airouterbackend.model.dto.auth.PhoneLoginRequest;
+import com.leo.airouterbackend.model.dto.auth.RefreshTokenRequest;
+import com.leo.airouterbackend.model.dto.auth.WechatOAuthUrlVO;
 import com.leo.airouterbackend.model.dto.email.ResetPasswordRequest;
 import com.leo.airouterbackend.model.dto.email.SendEmailCodeRequest;
+import com.leo.airouterbackend.model.dto.email.UserEmailBindRequest;
 import com.leo.airouterbackend.model.dto.email.UserEmailLoginRequest;
 import com.leo.airouterbackend.model.dto.email.UserEmailRegisterRequest;
 import com.leo.airouterbackend.model.dto.user.UserAddRequest;
 import com.leo.airouterbackend.model.dto.user.UserLoginRequest;
+import com.leo.airouterbackend.model.dto.user.UserProfileUpdateRequest;
 import com.leo.airouterbackend.model.dto.user.UserQueryRequest;
 import com.leo.airouterbackend.model.dto.user.UserRegisterRequest;
+import com.leo.airouterbackend.model.dto.user.UserSetPasswordRequest;
 import com.leo.airouterbackend.model.dto.user.UserUpdateRequest;
 import com.leo.airouterbackend.model.entity.User;
 import com.leo.airouterbackend.model.vo.LoginUserVO;
 import com.leo.airouterbackend.model.vo.UserVO;
 import com.leo.airouterbackend.service.BillingService;
+import com.leo.airouterbackend.service.AuthTokenService;
+import com.leo.airouterbackend.service.PhoneAuthService;
 import com.leo.airouterbackend.service.QuotaService;
+import com.leo.airouterbackend.service.RbacService;
 import com.leo.airouterbackend.service.RequestLogService;
 import com.leo.airouterbackend.service.UserService;
+import com.leo.airouterbackend.service.WechatOAuthService;
 import com.leo.airouterbackend.service.impl.EmailService;
+import com.leo.airouterbackend.utils.UserDefaultsUtils;
 import com.mybatisflex.core.paginate.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.annotation.Resource;
@@ -45,6 +60,7 @@ import java.math.BigDecimal;
 import static com.leo.airouterbackend.constant.EmailConstant.SCENE_LOGIN;
 import static com.leo.airouterbackend.constant.EmailConstant.SCENE_REGISTER;
 import static com.leo.airouterbackend.constant.EmailConstant.SCENE_RESET;
+import static com.leo.airouterbackend.constant.EmailConstant.SCENE_BIND;
 
 @RestController
 @RequestMapping("/user")
@@ -65,6 +81,18 @@ public class UserController {
     @Resource
     private BillingService billingService;
 
+    @Resource
+    private AuthTokenService authTokenService;
+
+    @Resource
+    private PhoneAuthService phoneAuthService;
+
+    @Resource
+    private WechatOAuthService wechatOAuthService;
+
+    @Resource
+    private RbacService rbacService;
+
     // ───────────────── 账号密码 登录/注册 ─────────────────
 
     @PostMapping("/register")
@@ -80,13 +108,13 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public BaseResponse<LoginUserVO> userLogin(
+    public BaseResponse<AuthLoginVO> userLogin(
             @RequestBody UserLoginRequest req,
             HttpServletRequest request) {
         if (req == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
         }
-        LoginUserVO loginUserVO = userService.userLogin(
+        AuthLoginVO loginUserVO = userService.userLogin(
                 req.getUserAccount(), req.getUserPassword(), request);
         return ResultUtils.success(loginUserVO);
     }
@@ -111,12 +139,101 @@ public class UserController {
     }
 
     @PostMapping("/email/login")
-    public BaseResponse<LoginUserVO> userLoginByEmail(
+    public BaseResponse<AuthLoginVO> userLoginByEmail(
             @RequestBody @Validated UserEmailLoginRequest request,
             HttpServletRequest httpRequest) {
         emailService.verifyCode(request.getEmail(), request.getCode(), SCENE_LOGIN);
-        LoginUserVO vo = userService.userLoginByEmail(request.getEmail(), httpRequest);
+        AuthLoginVO vo = userService.userLoginByEmail(request.getEmail(), httpRequest);
         return ResultUtils.success(vo);
+    }
+
+    @PostMapping("/email/bind/send-code")
+    public BaseResponse<Boolean> sendEmailBindCode(
+            @RequestBody @Validated SendEmailCodeRequest request,
+            HttpServletRequest httpRequest) {
+        userService.getLoginUser(httpRequest);
+        emailService.sendVerifyCode(request.getEmail(), SCENE_BIND);
+        return ResultUtils.success(true);
+    }
+
+    @PostMapping("/email/bind")
+    public BaseResponse<LoginUserVO> bindEmail(
+            @RequestBody @Validated UserEmailBindRequest request,
+            HttpServletRequest httpRequest) {
+        User loginUser = userService.getLoginUser(httpRequest);
+        boolean result = userService.bindEmail(loginUser.getId(), request.getEmail(), request.getCode());
+        if (!result) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "邮箱绑定失败");
+        }
+        return ResultUtils.success(userService.getLoginUserVO(userService.getById(loginUser.getId())));
+    }
+
+    @PostMapping("/phone/send-code")
+    public BaseResponse<PhoneCodeVO> sendPhoneCode(@RequestBody @Validated PhoneCodeRequest request) {
+        return ResultUtils.success(phoneAuthService.sendLoginCode(request.getPhone()));
+    }
+
+    @PostMapping("/phone/login")
+    public BaseResponse<AuthLoginVO> userLoginByPhone(
+            @RequestBody @Validated PhoneLoginRequest request,
+            HttpServletRequest httpRequest) {
+        return ResultUtils.success(phoneAuthService.loginByPhone(request.getPhone(), request.getCode(), httpRequest));
+    }
+
+    @PostMapping("/phone/bind/send-code")
+    public BaseResponse<PhoneCodeVO> sendPhoneBindCode(@RequestBody @Validated PhoneCodeRequest request,
+                                                       HttpServletRequest httpRequest) {
+        userService.getLoginUser(httpRequest);
+        return ResultUtils.success(phoneAuthService.sendBindCode(request.getPhone()));
+    }
+
+    @PostMapping("/phone/bind")
+    public BaseResponse<LoginUserVO> bindPhone(@RequestBody @Validated PhoneBindRequest request,
+                                               HttpServletRequest httpRequest) {
+        User loginUser = userService.getLoginUser(httpRequest);
+        boolean result = phoneAuthService.bindPhone(loginUser.getId(), request.getPhone(), request.getCode());
+        if (!result) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "手机号绑定失败");
+        }
+        return ResultUtils.success(userService.getLoginUserVO(userService.getById(loginUser.getId())));
+    }
+
+    @GetMapping("/wechat/oauth/url")
+    public BaseResponse<WechatOAuthUrlVO> getWechatOAuthUrl() {
+        return ResultUtils.success(wechatOAuthService.buildAuthorizeUrl());
+    }
+
+    @GetMapping("/wechat/oauth/callback")
+    public BaseResponse<AuthLoginVO> wechatOAuthCallback(@RequestParam String code,
+                                                         @RequestParam String state,
+                                                         HttpServletRequest request) {
+        return ResultUtils.success(wechatOAuthService.callback(code, state, request));
+    }
+
+    @PostMapping("/token/refresh")
+    public BaseResponse<AuthLoginVO> refreshToken(@RequestBody @Validated RefreshTokenRequest request,
+                                                  HttpServletRequest httpRequest) {
+        return ResultUtils.success(authTokenService.refresh(request.getRefreshToken(), httpRequest));
+    }
+
+    @PostMapping("/password/set")
+    public BaseResponse<Boolean> setPassword(@RequestBody @Validated UserSetPasswordRequest request,
+                                             HttpServletRequest httpRequest) {
+        User loginUser = userService.getLoginUser(httpRequest);
+        return ResultUtils.success(userService.setPassword(
+                loginUser.getId(), request.getUserPassword(), request.getCheckPassword()));
+    }
+
+    @PostMapping("/profile/update")
+    public BaseResponse<LoginUserVO> updateMyProfile(@RequestBody UserProfileUpdateRequest request,
+                                                     HttpServletRequest httpRequest) {
+        User loginUser = userService.getLoginUser(httpRequest);
+        boolean updated = userService.updateMyProfile(
+                loginUser.getId(), request.getUserName(), request.getUserAvatar(), request.getUserProfile());
+        if (!updated) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "个人资料更新失败");
+        }
+        return ResultUtils.success(userService.getLoginUserVO(userService.getById(loginUser.getId())));
     }
 
     @PostMapping("/email/register")
@@ -162,8 +279,10 @@ public class UserController {
         User user = new User();
         BeanUtil.copyProperties(userAddRequest, user);
         user.setUserPassword(userService.getEncryptedPassword("12345678"));
+        UserDefaultsUtils.fillNewUserDefaults(user);
         boolean save = userService.save(user);
         if (!save) throw new BusinessException(ErrorCode.OPERATION_ERROR, "添加用户失败");
+        rbacService.ensureDefaultRole(user.getId(), user.getUserRole());
         return ResultUtils.success(user.getId());
     }
 
@@ -186,6 +305,9 @@ public class UserController {
         BeanUtil.copyProperties(userUpdateRequest, user);
         boolean b = userService.updateById(user);
         if (!b) throw new BusinessException(ErrorCode.OPERATION_ERROR);
+        if (userUpdateRequest.getUserRole() != null) {
+            rbacService.assignUserRoles(userUpdateRequest.getId(), java.util.List.of(userUpdateRequest.getUserRole()));
+        }
         return ResultUtils.success(b);
     }
 

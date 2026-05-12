@@ -3,13 +3,44 @@
     <div class="page-header">
       <div>
         <div class="page-title">个人中心</div>
-        <div class="page-desc">查看余额、充值概览、消费统计和每日趋势</div>
+        <div class="page-desc">管理账号信息、查看余额、充值概览、消费统计和每日趋势</div>
       </div>
       <a-space wrap>
         <a-button size="large" @click="openBillDrawer">查看账单</a-button>
         <a-button type="primary" size="large" @click="openRechargeModal">充值</a-button>
       </a-space>
     </div>
+
+    <a-card :bordered="false" class="account-card">
+      <div class="account-main">
+        <a-avatar :size="72" :src="profileForm.userAvatar">
+          {{ (profileForm.userName || loginUser.userAccount || 'U').slice(0, 1) }}
+        </a-avatar>
+        <div class="account-info">
+          <div class="account-name">{{ profileForm.userName || loginUser.userAccount || '未命名用户' }}</div>
+          <div class="account-meta">
+            <a-tag>{{ loginUser.userRole || 'user' }}</a-tag>
+            <a-tag :color="loginUser.hasPassword ? 'green' : 'orange'">
+              {{ loginUser.hasPassword ? '已设置密码' : '未设置密码' }}
+            </a-tag>
+            <span>{{ loginUser.userPhone || '未绑定手机号' }}</span>
+            <span>{{ loginUser.userEmail || '未绑定邮箱' }}</span>
+          </div>
+        </div>
+        <a-space wrap>
+          <a-button @click="profileModalOpen = true">编辑资料</a-button>
+          <a-button @click="openEmailModal">
+            {{ loginUser.userEmail ? '更换邮箱' : '绑定邮箱' }}
+          </a-button>
+          <a-button @click="openPhoneModal">
+            {{ loginUser.userPhone ? '更换手机号' : '绑定手机号' }}
+          </a-button>
+          <a-button type="primary" @click="passwordModalOpen = true">
+            {{ loginUser.hasPassword ? '修改密码' : '设置密码' }}
+          </a-button>
+        </a-space>
+      </div>
+    </a-card>
 
     <div class="summary-grid">
       <a-card v-for="card in summaryCards" :key="card.title" :bordered="false" class="summary-card">
@@ -148,6 +179,91 @@
         </a-tab-pane>
       </a-tabs>
     </a-drawer>
+
+    <a-modal
+      v-model:open="profileModalOpen"
+      title="编辑个人资料"
+      ok-text="保存"
+      cancel-text="取消"
+      :confirm-loading="profileSaving"
+      @ok="submitProfile"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="姓名">
+          <a-input v-model:value="profileForm.userName" placeholder="请输入姓名" />
+        </a-form-item>
+        <a-form-item label="头像 URL">
+          <a-input v-model:value="profileForm.userAvatar" placeholder="请输入头像 URL" />
+        </a-form-item>
+        <a-form-item label="个人简介">
+          <a-textarea v-model:value="profileForm.userProfile" :rows="4" placeholder="请输入个人简介" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="passwordModalOpen"
+      :title="loginUser.hasPassword ? '修改密码' : '设置登录密码'"
+      ok-text="确认密码"
+      cancel-text="取消"
+      :confirm-loading="passwordSaving"
+      @ok="submitPassword"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="登录密码">
+          <a-input-password v-model:value="passwordForm.userPassword" placeholder="至少 8 位" />
+        </a-form-item>
+        <a-form-item label="确认密码">
+          <a-input-password v-model:value="passwordForm.checkPassword" placeholder="再次输入密码" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="emailModalOpen"
+      :title="loginUser.userEmail ? '更换邮箱' : '绑定邮箱'"
+      ok-text="确认绑定"
+      cancel-text="取消"
+      :confirm-loading="emailBinding"
+      @ok="submitEmailBind"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="邮箱">
+          <div class="code-row">
+            <a-input v-model:value="emailBindForm.email" placeholder="请输入邮箱地址" />
+            <a-button :loading="emailCodeSending" :disabled="emailCountdown.isCounting" @click="sendBindEmailCode">
+              {{ emailCountdown.isCounting ? `${emailCountdown.countdown}s` : '发送验证码' }}
+            </a-button>
+          </div>
+        </a-form-item>
+        <a-form-item label="验证码">
+          <a-input v-model:value="emailBindForm.code" placeholder="请输入验证码" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="phoneModalOpen"
+      :title="loginUser.userPhone ? '更换手机号' : '绑定手机号'"
+      ok-text="确认绑定"
+      cancel-text="取消"
+      :confirm-loading="phoneBinding"
+      @ok="submitPhoneBind"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="手机号">
+          <div class="code-row">
+            <a-input v-model:value="phoneBindForm.phone" placeholder="请输入手机号" />
+            <a-button :loading="phoneCodeSending" :disabled="phoneCountdown.isCounting" @click="sendBindPhoneCode">
+              {{ phoneCountdown.isCounting ? `${phoneCountdown.countdown}s` : '发送验证码' }}
+            </a-button>
+          </div>
+        </a-form-item>
+        <a-form-item label="验证码">
+          <a-input v-model:value="phoneBindForm.code" placeholder="请输入验证码" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -159,7 +275,9 @@ import DailyStatsTrendChart from '@/components/DailyStatsTrendChart.vue'
 import { getMyBalance, getMyBillingRecords } from '@/api/balanceController'
 import { createRecharge, getMyRechargeRecords } from '@/api/rechargeController'
 import { getMyDailyStats, getMySummaryStats } from '@/api/statsController'
-import { getMyQuota } from '@/api/userController'
+import { bindEmail, bindPhone, getLoginUser, getMyQuota, sendEmailBindCode, sendPhoneBindCode, setPassword, updateMyProfile } from '@/api/userController'
+import { useLoginUserStore } from '@/stores/loginUser'
+import { useEmailCodeCountdown } from '@/composables/useEmailCodeCountdown'
 
 interface DailyStatPoint {
   date: string
@@ -171,6 +289,8 @@ interface DailyStatPoint {
 
 const router = useRouter()
 const route = useRoute()
+const loginUserStore = useLoginUserStore()
+const loginUser = computed(() => loginUserStore.loginUser)
 const summary = ref<API.UserSummaryStatsVO>({})
 const quota = ref<API.QuotaVO>({})
 const balanceInfo = ref<API.BalanceVO>({})
@@ -184,10 +304,43 @@ const billingLoading = ref(false)
 const rechargeRecords = ref<API.RechargeRecord[]>([])
 const billingRecords = ref<API.BillingRecord[]>([])
 const quickAmounts = [10, 50, 100, 500]
+const profileModalOpen = ref(false)
+const passwordModalOpen = ref(false)
+const profileSaving = ref(false)
+const passwordSaving = ref(false)
+const emailModalOpen = ref(false)
+const phoneModalOpen = ref(false)
+const emailCodeSending = ref(false)
+const phoneCodeSending = ref(false)
+const emailBinding = ref(false)
+const phoneBinding = ref(false)
+const emailCountdown = useEmailCodeCountdown()
+const phoneCountdown = useEmailCodeCountdown()
 
 const rechargeForm = reactive({
   amount: 100,
   paymentMethod: 'alipay',
+})
+
+const profileForm = reactive({
+  userName: '',
+  userAvatar: '',
+  userProfile: '',
+})
+
+const passwordForm = reactive({
+  userPassword: '',
+  checkPassword: '',
+})
+
+const emailBindForm = reactive({
+  email: '',
+  code: '',
+})
+
+const phoneBindForm = reactive({
+  phone: '',
+  code: '',
 })
 
 const rechargePagination = reactive({
@@ -282,10 +435,20 @@ const formatTime = (value?: string) => {
 }
 
 const loadOverview = async () => {
-  const [summaryRes, quotaRes, balanceRes] = await Promise.all([getMySummaryStats(), getMyQuota(), getMyBalance()])
+  const [userRes, summaryRes, quotaRes, balanceRes] = await Promise.all([getLoginUser(), getMySummaryStats(), getMyQuota(), getMyBalance()])
+  if (userRes.data.code === 0 && userRes.data.data) {
+    loginUserStore.setLoginUser(userRes.data.data)
+    syncProfileForm(userRes.data.data)
+  }
   if (summaryRes.data.code === 0) summary.value = summaryRes.data.data ?? {}
   if (quotaRes.data.code === 0) quota.value = quotaRes.data.data ?? {}
   if (balanceRes.data.code === 0) balanceInfo.value = balanceRes.data.data ?? {}
+}
+
+const syncProfileForm = (user: API.LoginUserVO) => {
+  profileForm.userName = user.userName ?? ''
+  profileForm.userAvatar = user.userAvatar ?? ''
+  profileForm.userProfile = user.userProfile ?? ''
 }
 
 const loadDailyStats = async () => {
@@ -424,6 +587,148 @@ const submitRecharge = async () => {
   }
 }
 
+const submitProfile = async () => {
+  profileSaving.value = true
+  try {
+    const res = await updateMyProfile({ ...profileForm })
+    if (res.data.code === 0 && res.data.data) {
+      loginUserStore.setLoginUser(res.data.data)
+      syncProfileForm(res.data.data)
+      profileModalOpen.value = false
+      message.success('个人资料已更新')
+    } else {
+      message.error(res.data.message ?? '个人资料更新失败')
+    }
+  } finally {
+    profileSaving.value = false
+  }
+}
+
+const submitPassword = async () => {
+  if (!passwordForm.userPassword || passwordForm.userPassword.length < 8) {
+    message.warning('密码长度不能小于8位')
+    return
+  }
+  if (passwordForm.userPassword !== passwordForm.checkPassword) {
+    message.warning('两次密码不一致')
+    return
+  }
+  passwordSaving.value = true
+  try {
+    const res = await setPassword({ ...passwordForm })
+    if (res.data.code === 0) {
+      loginUserStore.setLoginUser({
+        ...loginUserStore.loginUser,
+        hasPassword: true,
+        needSetPassword: false,
+      })
+      passwordForm.userPassword = ''
+      passwordForm.checkPassword = ''
+      passwordModalOpen.value = false
+      message.success('密码已保存')
+    } else {
+      message.error(res.data.message ?? '密码保存失败')
+    }
+  } finally {
+    passwordSaving.value = false
+  }
+}
+
+const openEmailModal = () => {
+  emailBindForm.email = loginUser.value.userEmail ?? ''
+  emailBindForm.code = ''
+  emailModalOpen.value = true
+}
+
+const openPhoneModal = () => {
+  phoneBindForm.phone = loginUser.value.userPhone ?? ''
+  phoneBindForm.code = ''
+  phoneModalOpen.value = true
+}
+
+const sendBindEmailCode = async () => {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailBindForm.email)) {
+    message.warning('请输入正确的邮箱')
+    return
+  }
+  emailCodeSending.value = true
+  try {
+    const res = await sendEmailBindCode({ email: emailBindForm.email.trim(), scene: 'bind' })
+    if (res.data.code === 0) {
+      message.success('验证码已发送')
+      emailCountdown.start()
+    } else {
+      message.error(res.data.message ?? '验证码发送失败')
+    }
+  } finally {
+    emailCodeSending.value = false
+  }
+}
+
+const sendBindPhoneCode = async () => {
+  if (!/^1[3-9]\d{9}$/.test(phoneBindForm.phone)) {
+    message.warning('请输入正确的手机号')
+    return
+  }
+  phoneCodeSending.value = true
+  try {
+    const res = await sendPhoneBindCode({ phone: phoneBindForm.phone.trim() })
+    if (res.data.code === 0) {
+      if (res.data.data?.mockMode && res.data.data.devCode) {
+        phoneBindForm.code = res.data.data.devCode
+        message.info(`本地开发验证码：${res.data.data.devCode}`)
+      } else {
+        message.success(res.data.data?.message ?? '验证码已发送')
+      }
+      phoneCountdown.start()
+    } else {
+      message.error(res.data.message ?? '验证码发送失败')
+    }
+  } finally {
+    phoneCodeSending.value = false
+  }
+}
+
+const submitEmailBind = async () => {
+  if (!emailBindForm.email || !emailBindForm.code) {
+    message.warning('请输入邮箱和验证码')
+    return
+  }
+  emailBinding.value = true
+  try {
+    const res = await bindEmail({ email: emailBindForm.email.trim(), code: emailBindForm.code.trim() })
+    if (res.data.code === 0 && res.data.data) {
+      loginUserStore.setLoginUser(res.data.data)
+      emailModalOpen.value = false
+      message.success('邮箱已更新')
+    } else {
+      message.error(res.data.message ?? '邮箱绑定失败')
+    }
+  } finally {
+    emailBinding.value = false
+  }
+}
+
+const submitPhoneBind = async () => {
+  if (!phoneBindForm.phone || !phoneBindForm.code) {
+    message.warning('请输入手机号和验证码')
+    return
+  }
+  phoneBinding.value = true
+  try {
+    const res = await bindPhone({ phone: phoneBindForm.phone.trim(), code: phoneBindForm.code.trim() })
+    if (res.data.code === 0 && res.data.data) {
+      loginUserStore.setLoginUser(res.data.data)
+      phoneModalOpen.value = false
+      message.success('手机号已更新')
+    } else {
+      message.error(res.data.message ?? '手机号绑定失败')
+    }
+  } finally {
+    phoneBinding.value = false
+  }
+}
+
 const handleRechargeRedirect = () => {
   const rechargeState = String(route.query.recharge ?? '')
   if (rechargeState === 'success') {
@@ -464,6 +769,12 @@ onMounted(() => {
 .page-header { margin-bottom: 20px; display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
 .page-title { font-size: 24px; font-weight: 700; color: #111827; }
 .page-desc { margin-top: 6px; color: #6b7280; }
+.account-card { margin-bottom: 18px; border-radius: 18px; }
+.account-main { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.account-info { flex: 1; min-width: 240px; }
+.account-name { font-size: 20px; font-weight: 700; color: #111827; }
+.account-meta { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: #64748b; }
+.code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
 .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 18px; }
 .summary-card { border-radius: 18px; background: linear-gradient(180deg, #ffffff, #f8fbff); }
 .summary-title { color: #64748b; font-size: 13px; }

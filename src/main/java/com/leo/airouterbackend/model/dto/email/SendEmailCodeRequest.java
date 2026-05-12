@@ -15,6 +15,6 @@ public class SendEmailCodeRequest implements Serializable {
     private String email;
 
     @NotBlank(message = "场景不能为空")
-    @Pattern(regexp = "^(login|register|reset)$", message = "场景参数非法")
+    @Pattern(regexp = "^(login|register|reset|bind)$", message = "场景参数非法")
     private String scene;
 }

@@ -15,4 +15,8 @@ public @interface AuthCheck {
      * @return
      */
     String mustRole() default "";
+
+    String[] mustPermissions() default {};
+
+    boolean requireAll() default true;
 }

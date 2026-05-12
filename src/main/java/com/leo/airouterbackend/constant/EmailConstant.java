@@ -10,6 +10,7 @@ public interface EmailConstant {
     String SCENE_LOGIN    = "login";
     String SCENE_REGISTER = "register";
     String SCENE_RESET    = "reset";
+    String SCENE_BIND     = "bind";
 
     String CODE_PREFIX       = "email:code:";
     String COOL_DOWN_PREFIX  = "email:cooldown:";

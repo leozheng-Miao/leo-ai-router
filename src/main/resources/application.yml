@@ -47,6 +47,32 @@ mail:
   from: 1154027884@qq.com
   code-expire: 300      # ?????????
   code-cool-down: 60    # ?????????
+auth:
+  jwt:
+    secret: ${LEO_AUTH_JWT_SECRET:E9WjGC8K3X1eZf9kB3jUaqKPRMqLxWxzrz8mtCfMSpwuRSZmtwjgG/thHAdL0sUN/p8fVTBNxTC2hAloUl3Opw==}
+    issuer: leo-ai-router
+    access-token-ttl-seconds: 7200
+    refresh-token-ttl-seconds: 2592000
+tencent:
+  sms:
+    enabled: ${TENCENT_SMS_ENABLED:false}
+    secret-id: ${TENCENT_SMS_SECRET_ID:}
+    secret-key: ${TENCENT_SMS_SECRET_KEY:}
+    region: ${TENCENT_SMS_REGION:ap-guangzhou}
+    sdk-app-id: ${TENCENT_SMS_SDK_APP_ID:}
+    sign-name: ${TENCENT_SMS_SIGN_NAME:}
+    login-template-id: ${TENCENT_SMS_LOGIN_TEMPLATE_ID:}
+    local-code-visible: ${TENCENT_SMS_LOCAL_CODE_VISIBLE:true}
+    code-expire-minutes: 5
+    code-cool-down-seconds: 60
+wechat:
+  oauth:
+    enabled: ${WECHAT_OAUTH_ENABLED:false}
+    app-id: ${WECHAT_OAUTH_APP_ID:}
+    app-secret: ${WECHAT_OAUTH_APP_SECRET:}
+    redirect-uri: ${WECHAT_OAUTH_REDIRECT_URI:http://localhost:5173/oauth/wechat/callback}
+    frontend-success-url: ${WECHAT_OAUTH_FRONTEND_SUCCESS_URL:http://localhost:5173/oauth/wechat/callback}
+    state-ttl-seconds: 300
 logging:
   level:
     org.springframework.web.client.RestClient: DEBUG

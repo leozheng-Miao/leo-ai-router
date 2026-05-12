@@ -205,7 +205,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { DownloadOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import { generateImage, getMyRecords } from '@/api/imageController'
-import { listActiveModelsByType } from '@/api/modelController'
+import { listAvailableModels } from '@/api/modelController'
 
 const generating = ref(false)
 const historyLoading = ref(false)
@@ -322,9 +322,11 @@ watch(selectedModel, (model) => {
 })
 
 const loadModels = async () => {
-  const res = await listActiveModelsByType({ modelType: 'image' })
+  const res = await listAvailableModels()
   if (res.data.code === 0) {
-    imageModels.value = (res.data.data ?? []).sort((a, b) => Number(a.inputPrice ?? 0) - Number(b.inputPrice ?? 0))
+    imageModels.value = (res.data.data ?? [])
+      .filter((item) => item.modelType === 'image')
+      .sort((a, b) => Number(a.inputPrice ?? 0) - Number(b.inputPrice ?? 0))
     const firstModel = imageModels.value[0]
     if (!form.model && firstModel?.modelKey) {
       form.model = firstModel.modelKey

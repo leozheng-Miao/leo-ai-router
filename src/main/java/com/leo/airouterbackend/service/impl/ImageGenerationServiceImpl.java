@@ -1,6 +1,7 @@
 package com.leo.airouterbackend.service.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.leo.airouterbackend.constant.PermissionConstant;
 import com.leo.airouterbackend.adaptor.ImageModelAdapter;
 import com.leo.airouterbackend.adaptor.ImageModelAdapterFactory;
 import com.leo.airouterbackend.exception.BusinessException;
@@ -18,6 +19,8 @@ import com.leo.airouterbackend.service.ImageGenerationService;
 import com.leo.airouterbackend.service.ModelProviderService;
 import com.leo.airouterbackend.service.ModelService;
 import com.leo.airouterbackend.service.QuotaService;
+import com.leo.airouterbackend.service.RbacService;
+import com.leo.airouterbackend.service.UsageLimitService;
 import com.leo.airouterbackend.service.UserService;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -63,6 +66,12 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
     private UserService userService;
 
     @Resource
+    private RbacService rbacService;
+
+    @Resource
+    private UsageLimitService usageLimitService;
+
+    @Resource
     private ImageModelAdapterFactory imageModelAdapterFactory;
 
     private static final String DEFAULT_SIZE = "1024x1024";
@@ -91,6 +100,13 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
         Model model = resolveImageModel(request.getModel());
         if (model == null || !"image".equals(model.getModelType())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型不存在或不是图片生成模型");
+        }
+        if (userId != null) {
+            if (!rbacService.hasPermission(userId, PermissionConstant.IMAGE_USE)
+                    || !rbacService.hasPermission(userId, PermissionConstant.MODEL_USE_PREFIX + model.getModelKey())) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "当前角色无权使用该图片模型");
+            }
+            usageLimitService.checkAndRecordImage(userId);
         }
         String modelKey = model.getModelKey();
         ModelProvider modelProvider = modelProviderService.getById(model.getProviderId());

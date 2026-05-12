@@ -29,6 +29,8 @@ public interface PluginService extends IService<PluginConfig> {
      */
     List<PluginConfigVO> listEnabledPlugins();
 
+    List<PluginConfigVO> listAvailablePlugins(Long userId);
+
     /**
      * 根据插件标识获取插件配置
      *

@@ -20,6 +20,7 @@ import static com.leo.airouterbackend.constant.EmailConstant.COOL_DOWN_PREFIX;
 import static com.leo.airouterbackend.constant.EmailConstant.SCENE_LOGIN;
 import static com.leo.airouterbackend.constant.EmailConstant.SCENE_REGISTER;
 import static com.leo.airouterbackend.constant.EmailConstant.SCENE_RESET;
+import static com.leo.airouterbackend.constant.EmailConstant.SCENE_BIND;
 
 @Slf4j
 @Service
@@ -76,6 +77,7 @@ public class EmailService {
             case SCENE_LOGIN    -> "【登录验证】您的登录验证码";
             case SCENE_REGISTER -> "【注册验证】您的注册验证码";
             case SCENE_RESET    -> "【重置密码】您的密码重置验证码";
+            case SCENE_BIND     -> "【账号绑定】您的邮箱绑定验证码";
             default             -> "【验证码】";
         };
     }
@@ -85,6 +87,7 @@ public class EmailService {
             case SCENE_LOGIN    -> "登录";
             case SCENE_REGISTER -> "注册";
             case SCENE_RESET    -> "重置密码";
+            case SCENE_BIND     -> "绑定邮箱";
             default             -> "操作";
         };
         long expireMin = mailProperties.getCodeExpire() / 60;

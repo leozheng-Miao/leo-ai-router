@@ -61,7 +61,7 @@ export async function userLoginByEmail(
   body: API.UserEmailLoginRequest,
   options?: { [key: string]: any }
 ) {
-  return request<API.BaseResponseLoginUserVO>('/user/email/login', {
+  return request<API.BaseResponseAuthLoginVO>('/user/email/login', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -186,7 +186,7 @@ export async function listUserVoByPage(
 
 /** 此处后端没有提供注释 POST /user/login */
 export async function userLogin(body: API.UserLoginRequest, options?: { [key: string]: any }) {
-  return request<API.BaseResponseLoginUserVO>('/user/login', {
+  return request<API.BaseResponseAuthLoginVO>('/user/login', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -200,6 +200,114 @@ export async function userLogin(body: API.UserLoginRequest, options?: { [key: st
 export async function userLogout(options?: { [key: string]: any }) {
   return request<API.BaseResponseBoolean>('/user/logout', {
     method: 'POST',
+    ...(options || {}),
+  })
+}
+
+export async function sendPhoneCode(body: API.PhoneCodeRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponsePhoneCodeVO>('/user/phone/send-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+export async function userLoginByPhone(body: API.PhoneLoginRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseAuthLoginVO>('/user/phone/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+export async function sendPhoneBindCode(body: API.PhoneCodeRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponsePhoneCodeVO>('/user/phone/bind/send-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+export async function bindPhone(body: API.PhoneBindRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseLoginUserVO>('/user/phone/bind', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+export async function sendEmailBindCode(
+  body: API.SendEmailCodeRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/email/bind/send-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+export async function bindEmail(body: API.UserEmailBindRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseLoginUserVO>('/user/email/bind', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+export async function getWechatOAuthUrl(options?: { [key: string]: any }) {
+  return request<API.BaseResponseWechatOAuthUrlVO>('/user/wechat/oauth/url', {
+    method: 'GET',
+    ...(options || {}),
+  })
+}
+
+export async function wechatOAuthCallback(
+  params: { code: string; state: string },
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseAuthLoginVO>('/user/wechat/oauth/callback', {
+    method: 'GET',
+    params,
+    ...(options || {}),
+  })
+}
+
+export async function refreshToken(body: API.RefreshTokenRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseAuthLoginVO>('/user/token/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+export async function setPassword(
+  body: API.UserSetPasswordRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseBoolean>('/user/password/set', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+export async function updateMyProfile(
+  body: API.UserProfileUpdateRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseLoginUserVO>('/user/profile/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
     ...(options || {}),
   })
 }

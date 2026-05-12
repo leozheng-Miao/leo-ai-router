@@ -1,5 +1,6 @@
 package com.leo.airouterbackend.service;
 
+import com.leo.airouterbackend.model.dto.auth.AuthLoginVO;
 import com.leo.airouterbackend.model.dto.user.UserQueryRequest;
 import com.leo.airouterbackend.model.entity.User;
 import com.leo.airouterbackend.model.vo.LoginUserVO;
@@ -20,18 +21,24 @@ public interface UserService extends IService<User> {
     /**
      * 用户登录
      */
-    LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request);
+    AuthLoginVO userLogin(String userAccount, String userPassword, HttpServletRequest request);
 
     /**
      * 获取当前登录用户
      */
     User getLoginUser(HttpServletRequest request);
 
-    LoginUserVO userLoginByEmail(String email, HttpServletRequest request);
+    AuthLoginVO userLoginByEmail(String email, HttpServletRequest request);
 
     long userRegisterByEmail(String email, String code, String userPassword, String checkPassword);
 
     boolean resetPassword(String email, String newPassword, String checkPassword);
+
+    boolean setPassword(Long userId, String userPassword, String checkPassword);
+
+    boolean updateMyProfile(Long userId, String userName, String userAvatar, String userProfile);
+
+    boolean bindEmail(Long userId, String email, String code);
 
     /**
      * 获取脱敏的登录用户信息

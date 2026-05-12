@@ -6,6 +6,7 @@ import com.leo.airouterbackend.common.BaseResponse;
 import com.leo.airouterbackend.common.DeleteRequest;
 import com.leo.airouterbackend.common.ResultUtils;
 import com.leo.airouterbackend.constant.UserConstant;
+import com.leo.airouterbackend.constant.PermissionConstant;
 import com.leo.airouterbackend.exception.ErrorCode;
 import com.leo.airouterbackend.exception.ThrowUtils;
 import com.leo.airouterbackend.model.dto.model.ModelAddRequest;
@@ -15,6 +16,8 @@ import com.leo.airouterbackend.model.entity.Model;
 import com.leo.airouterbackend.model.enums.ModelStatusEnum;
 import com.leo.airouterbackend.model.vo.ModelVO;
 import com.leo.airouterbackend.service.ModelService;
+import com.leo.airouterbackend.service.UserService;
+import com.leo.airouterbackend.model.entity.User;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
@@ -33,6 +36,9 @@ public class ModelController {
     @Resource
     private ModelService modelService;
 
+    @Resource
+    private UserService userService;
+
     /**
      * 创建模型（管理员）
      *
@@ -40,7 +46,7 @@ public class ModelController {
      * @return 创建的模型ID
      */
     @PostMapping("/add")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE, mustPermissions = PermissionConstant.ADMIN_MODEL)
     public BaseResponse<Long> addModel(@RequestBody ModelAddRequest modelAddRequest) {
         ThrowUtils.throwIf(modelAddRequest == null, ErrorCode.PARAMS_ERROR);
 
@@ -73,7 +79,7 @@ public class ModelController {
      * @return 是否删除成功
      */
     @PostMapping("/delete")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE, mustPermissions = PermissionConstant.ADMIN_MODEL)
     public BaseResponse<Boolean> deleteModel(@RequestBody DeleteRequest deleteRequest) {
         ThrowUtils.throwIf(deleteRequest == null || deleteRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
 
@@ -88,7 +94,7 @@ public class ModelController {
      * @return 是否更新成功
      */
     @PostMapping("/update")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE, mustPermissions = PermissionConstant.ADMIN_MODEL)
     public BaseResponse<Boolean> updateModel(@RequestBody ModelUpdateRequest modelUpdateRequest) {
         ThrowUtils.throwIf(modelUpdateRequest == null || modelUpdateRequest.getId() == null, ErrorCode.PARAMS_ERROR);
 
@@ -159,6 +165,14 @@ public class ModelController {
         List<Model> activeModels = modelService.getActiveModels();
         List<ModelVO> modelVOList = modelService.getModelVOList(activeModels);
         return ResultUtils.success(modelVOList);
+    }
+
+    @GetMapping("/list/available")
+    @AuthCheck(mustRole = UserConstant.DEFAULT_ROLE)
+    public BaseResponse<List<ModelVO>> listAvailableModels(jakarta.servlet.http.HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        List<Model> activeModels = modelService.getAvailableModels(loginUser.getId());
+        return ResultUtils.success(modelService.getModelVOList(activeModels));
     }
 
     /**

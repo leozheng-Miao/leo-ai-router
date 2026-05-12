@@ -20,6 +20,11 @@ const router = createRouter({
       component: () => import('@/pages/user/UserRegisterPage.vue'),
     },
     {
+      path: '/oauth/wechat/callback',
+      name: 'wechatOAuthCallback',
+      component: () => import('@/pages/user/WechatOAuthCallbackPage.vue'),
+    },
+    {
       path: '/keys',
       name: 'apiKeys',
       component: () => import('@/pages/user/ApiKeyPage.vue'),
@@ -73,6 +78,11 @@ const router = createRouter({
       path: '/users',
       name: 'users',
       component: () => import('@/pages/admin/UserManagementPage.vue'),
+    },
+    {
+      path: '/roles',
+      name: 'roles',
+      component: () => import('@/pages/admin/RoleManagementPage.vue'),
     },
   ],
 })

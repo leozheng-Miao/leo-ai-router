@@ -40,6 +40,12 @@ public class User implements Serializable {
     @Column("userEmail")
     private String userEmail;
 
+    @Column("userPhone")
+    private String userPhone;
+
+    @Column("phoneVerified")
+    private Integer phoneVerified;
+
     /**
      * 密码
      */
@@ -117,5 +123,8 @@ public class User implements Serializable {
      */
     @Column("balance")
     private BigDecimal balance;
+
+    @Column("tokenVersion")
+    private Integer tokenVersion;
 
 }

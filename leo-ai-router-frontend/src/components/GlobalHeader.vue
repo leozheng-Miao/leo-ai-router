@@ -91,6 +91,11 @@
                     <KeyOutlined /> 用户管理
                   </RouterLink>
                 </a-menu-item>
+                <a-menu-item v-if="loginUserStore.loginUser.userRole === 'admin'" key="roles">
+                  <RouterLink to="/roles" style="color: #374151; text-decoration: none">
+                    <KeyOutlined /> 角色权限
+                  </RouterLink>
+                </a-menu-item>
                 <a-menu-divider />
 
                 <a-menu-item key="logout" @click="handleLogout">
@@ -117,19 +122,30 @@ import { message } from 'ant-design-vue'
 import { DownOutlined, LogoutOutlined, FileTextOutlined, KeyOutlined } from '@ant-design/icons-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { userLogout } from '@/api/userController'
+import { clearAuthTokens, getRefreshToken } from '@/utils/authToken'
 
 const router = useRouter()
 const route = useRoute()
 const loginUserStore = useLoginUserStore()
 
-const navItems = [
-  { label: '首页', path: '/' },
-  { label: '提供者管理', path: '/providers' },
-  { label: '模型管理', path: '/models' },
-  { label: '插件管理', path: '/plugins' },
-  { label: '在线对话', path: '/chat' },
-  { label: 'AI 绘图', path: '/images' },
-]
+const navItems = computed(() => {
+  const items = [
+    { label: '首页', path: '/' },
+    { label: '在线对话', path: '/chat' },
+    { label: 'AI 绘图', path: '/images' },
+  ]
+  if (loginUserStore.loginUser.userRole === 'admin') {
+    items.splice(
+      1,
+      0,
+      { label: '提供者管理', path: '/providers' },
+      { label: '模型管理', path: '/models' },
+      { label: '插件管理', path: '/plugins' },
+      { label: '角色权限', path: '/roles' },
+    )
+  }
+  return items
+})
 
 const isActive = (path: string) => (path === '/' ? route.path === '/' : route.path.startsWith(path))
 
@@ -138,8 +154,13 @@ const userInitial = computed(() =>
 )
 
 const handleLogout = async () => {
-  const res = await userLogout()
+  const res = await userLogout({
+    headers: {
+      'X-Refresh-Token': getRefreshToken(),
+    },
+  })
   if (res.data.code === 0) {
+    clearAuthTokens()
     loginUserStore.setLoginUser({ userName: '未登录' })
     message.success('已退出登录')
     router.push('/user/login')

@@ -54,6 +54,8 @@ public interface ModelService extends IService<Model> {
      */
     List<Model> getActiveModels();
 
+    List<Model> getAvailableModels(Long userId);
+
     /**
      * 根据提供者ID获取所有启用的模型
      *

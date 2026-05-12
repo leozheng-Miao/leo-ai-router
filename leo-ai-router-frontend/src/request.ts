@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { message } from 'ant-design-vue'
+import { clearAuthTokens, getAccessToken, getRefreshToken, saveAuthTokens } from '@/utils/authToken'
 
 const myAxios = axios.create({
   baseURL: 'http://localhost:8123/api',
@@ -10,6 +11,11 @@ const myAxios = axios.create({
 // 全局请求拦截器
 myAxios.interceptors.request.use(
   function (config) {
+    const token = getAccessToken()
+    if (token) {
+      config.headers = config.headers || {}
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   function (error) {
@@ -19,16 +25,35 @@ myAxios.interceptors.request.use(
 
 // 全局响应拦截器
 myAxios.interceptors.response.use(
-  function (response) {
+  async function (response) {
     const { data } = response
     // 未登录
     if (data.code === 40100) {
       if (
         !response.request.responseURL.includes('user/get/login') &&
+        !response.request.responseURL.includes('user/token/refresh') &&
         !window.location.pathname.includes('/user/login')
       ) {
+        const refreshToken = getRefreshToken()
+        if (refreshToken && !(response.config as any).__isRetryRequest) {
+          try {
+            ;(response.config as any).__isRetryRequest = true
+            const refreshRes = await axios.post('http://localhost:8123/api/user/token/refresh', {
+              refreshToken,
+            })
+            if (refreshRes.data.code === 0 && refreshRes.data.data?.accessToken) {
+              saveAuthTokens(refreshRes.data.data.accessToken, refreshRes.data.data.refreshToken)
+              response.config.headers = response.config.headers || {}
+              response.config.headers.Authorization = `Bearer ${refreshRes.data.data.accessToken}`
+              return myAxios.request(response.config)
+            }
+          } catch {
+            clearAuthTokens()
+          }
+        }
+        clearAuthTokens()
         message.warning('请先登录')
-        window.location.href = `/user/login?redirect=${window.location.href}`
+        window.location.href = `/user/login?redirect=${encodeURIComponent(window.location.href)}`
       }
     }
     return response

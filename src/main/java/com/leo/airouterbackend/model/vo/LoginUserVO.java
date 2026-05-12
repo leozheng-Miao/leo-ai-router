@@ -33,6 +33,10 @@ public class LoginUserVO implements Serializable {
      */
     private String userEmail;
 
+    private String userPhone;
+
+    private Integer phoneVerified;
+
     /**
      * 用户头像
      */
@@ -87,6 +91,12 @@ public class LoginUserVO implements Serializable {
      * 用户余额
      */
     private BigDecimal balance;
+
+    private Integer tokenVersion;
+
+    private Boolean hasPassword;
+
+    private Boolean needSetPassword;
 
     private static final long serialVersionUID = 1L;
 }
