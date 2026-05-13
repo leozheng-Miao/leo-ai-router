@@ -15,6 +15,7 @@ import com.leo.airouterbackend.model.entity.Model;
 import com.leo.airouterbackend.model.entity.ModelProvider;
 import com.leo.airouterbackend.service.BalanceService;
 import com.leo.airouterbackend.service.BillingService;
+import com.leo.airouterbackend.service.EntitlementService;
 import com.leo.airouterbackend.service.ImageGenerationService;
 import com.leo.airouterbackend.service.ModelProviderService;
 import com.leo.airouterbackend.service.ModelService;
@@ -74,6 +75,9 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
     @Resource
     private ImageModelAdapterFactory imageModelAdapterFactory;
 
+    @Resource
+    private EntitlementService entitlementService;
+
     private static final String DEFAULT_SIZE = "1024x1024";
     private static final int DEFAULT_N = 1;
 
@@ -89,11 +93,6 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
             throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务");
         }
 
-        // 检查用户配额
-        if (userId != null && !quotaService.checkQuota(userId)) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额");
-        }
-
         // 设置默认值
         String size = StrUtil.isNotBlank(request.getSize()) ? request.getSize() : DEFAULT_SIZE;
         int n = request.getN() != null && request.getN() > 0 ? request.getN() : DEFAULT_N;
@@ -102,22 +101,16 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型不存在或不是图片生成模型");
         }
         if (userId != null) {
-            if (!rbacService.hasPermission(userId, PermissionConstant.IMAGE_USE)
-                    || !rbacService.hasPermission(userId, PermissionConstant.MODEL_USE_PREFIX + model.getModelKey())) {
+            if (!rbacService.hasPermission(userId, PermissionConstant.IMAGE_USE)) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "当前角色无权使用该图片模型");
             }
-            usageLimitService.checkAndRecordImage(userId);
+            entitlementService.checkImagePoints(userId, model, n);
         }
         String modelKey = model.getModelKey();
         ModelProvider modelProvider = modelProviderService.getById(model.getProviderId());
         if (modelProvider == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型提供者不存在");
         }
-        BigDecimal estimatedCost = model.getInputPrice() != null ? model.getInputPrice().multiply(new BigDecimal(n)) : BigDecimal.ZERO;
-        if (userId != null && !balanceService.checkBalance(userId, estimatedCost)) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "余额不足，生成 " + "n " + "张图片需要¥ " + estimatedCost + ", 请先充值");
-        }
-
         try {
             request.setSize(size);
             request.setN(n);
@@ -126,7 +119,7 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
 
             long duration = System.currentTimeMillis() - startTime;
             int actualImageCount = response.getData() != null ? response.getData().size() : n;
-            BigDecimal actualCost = model.getInputPrice() != null ? model.getInputPrice().multiply(new BigDecimal(actualImageCount)) : BigDecimal.ZERO;
+            Long firstRecordId = null;
             for (ImageGenerationResponse.ImageData imageData : response.getData()) {
                 ImageGenerationRecord record = ImageGenerationRecord.builder()
                         .userId(userId)
@@ -146,19 +139,15 @@ public class ImageGenerationServiceImpl extends ServiceImpl<ImageGenerationRecor
                         .createTime(LocalDateTime.now())
                         .build();
                 save(record);
+                if (firstRecordId == null) {
+                    firstRecordId = record.getId();
+                }
             }
 
             if (userId != null) {
                 int tokenPerImage = 1000;
                 int totalTokens = tokenPerImage * actualImageCount;
-                quotaService.deductTokens(userId, totalTokens);
-
-                if (actualCost.compareTo(BigDecimal.ZERO) > 0) {
-                    String description = apiKeyId != null
-                            ? "API Key " + modelKey + " 生成 " + actualImageCount + " 张图片"
-                            : "网页生成 " + modelKey + " 生成 " + actualImageCount + " 张图片";
-                    balanceService.deductBalance(userId, actualCost, null, description);
-                }
+                entitlementService.deductImagePoints(userId, model, actualImageCount, firstRecordId);
                 // 收集监控指标
                 aiMetricsCollector.recordRequest(model.getModelKey(), userId, apiKeyId != null ? apiKeyId.toString() : null);
                 aiMetricsCollector.recordTokens(model.getModelKey(), totalTokens);

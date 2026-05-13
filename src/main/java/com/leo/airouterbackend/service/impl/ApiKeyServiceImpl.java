@@ -8,7 +8,7 @@ import com.leo.airouterbackend.model.entity.ApiKey;
 import com.leo.airouterbackend.model.entity.User;
 import com.leo.airouterbackend.model.enums.ApiKeyStatusEnum;
 import com.leo.airouterbackend.service.ApiKeyService;
-import com.leo.airouterbackend.service.UsageLimitService;
+import com.leo.airouterbackend.service.EntitlementService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
@@ -21,7 +21,7 @@ import java.util.List;
 public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> implements ApiKeyService {
 
     @Resource
-    private UsageLimitService usageLimitService;
+    private EntitlementService entitlementService;
 
     @Override
     public ApiKey createApiKey(String keyName, User loginUser) {
@@ -29,7 +29,7 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> impleme
                 .eq("userId", loginUser.getId())
                 .eq("isDelete", 0)
                 .ne("status", ApiKeyStatusEnum.REVOKED.getValue()));
-        usageLimitService.checkApiKeyCreate(loginUser.getId(), currentCount);
+        entitlementService.checkApiKeyCreate(loginUser.getId(), currentCount);
         // 生成 API Key（sk- 前缀 + 32位随机字符）
         String keyValue = "sk-" + IdUtil.simpleUUID();
 

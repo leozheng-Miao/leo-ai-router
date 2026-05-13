@@ -62,6 +62,12 @@ public class Model implements Serializable {
     private String modelType;
 
     /**
+     * 访问等级：free/pro/advanced/image/video
+     */
+    @Column("accessTier")
+    private String accessTier;
+
+    /**
      * 模型描述
      */
     private String description;
@@ -83,6 +89,12 @@ public class Model implements Serializable {
      */
     @Column("outputPrice")
     private BigDecimal outputPrice;
+
+    /**
+     * 积分成本：图片/视频单次消耗积分
+     */
+    @Column("pointCost")
+    private Integer pointCost;
 
     /**
      * 状态：active/inactive/deprecated

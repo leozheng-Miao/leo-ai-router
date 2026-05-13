@@ -3,6 +3,7 @@ package com.leo.airouterbackend.service.impl.payment;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
 import com.leo.airouterbackend.model.dto.payment.PaymentCreateResult;
+import com.leo.airouterbackend.model.entity.PaymentOrder;
 import com.leo.airouterbackend.model.enums.PaymentMethodEnum;
 import com.leo.airouterbackend.service.payment.PaymentProvider;
 import com.leo.airouterbackend.service.payment.PaymentService;
@@ -29,6 +30,11 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public PaymentCreateResult createRecharge(Long userId, BigDecimal amount, PaymentMethodEnum paymentMethod) {
         return getProvider(paymentMethod).createRecharge(userId, amount);
+    }
+
+    @Override
+    public PaymentCreateResult createOrder(PaymentOrder order, PaymentMethodEnum paymentMethod) {
+        return getProvider(paymentMethod).createOrder(order);
     }
 
     @Override

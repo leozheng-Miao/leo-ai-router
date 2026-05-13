@@ -10,7 +10,7 @@ import com.leo.airouterbackend.model.entity.ModelProvider;
 import com.leo.airouterbackend.model.entity.UserProviderKey;
 import com.leo.airouterbackend.model.vo.UserProviderKeyVO;
 import com.leo.airouterbackend.service.ModelProviderService;
-import com.leo.airouterbackend.service.UsageLimitService;
+import com.leo.airouterbackend.service.EntitlementService;
 import com.leo.airouterbackend.service.UserProviderKeyService;
 import com.leo.airouterbackend.utils.EncryptionUtils;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -34,14 +34,14 @@ public class UserProviderKeyServiceImpl extends ServiceImpl<UserProviderKeyMappe
     private ModelProviderService modelProviderService;
 
     @Resource
-    private UsageLimitService usageLimitService;
+    private EntitlementService entitlementService;
 
     @Override
     public boolean addUserProviderKey(UserProviderKeyAddRequest request, Long userId) {
         if (request.getProviderId() == null || StrUtil.isBlank(request.getApiKey())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        usageLimitService.checkByokAllowed(userId);
+        entitlementService.checkByokAllowed(userId);
 
         // 检查提供者是否存在
         ModelProvider provider = modelProviderService.getById(request.getProviderId());

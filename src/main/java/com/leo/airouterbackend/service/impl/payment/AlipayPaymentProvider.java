@@ -12,13 +12,16 @@ import com.leo.airouterbackend.config.AlipayPaymentConfig;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
 import com.leo.airouterbackend.model.dto.payment.PaymentCreateResult;
+import com.leo.airouterbackend.model.entity.PaymentOrder;
 import com.leo.airouterbackend.model.entity.RechargeRecord;
 import com.leo.airouterbackend.model.enums.PaymentDisplayTypeEnum;
 import com.leo.airouterbackend.model.enums.PaymentMethodEnum;
 import com.leo.airouterbackend.service.RechargeService;
+import com.leo.airouterbackend.service.PaymentOrderService;
 import com.leo.airouterbackend.service.payment.PaymentProvider;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -31,6 +34,7 @@ public class AlipayPaymentProvider implements PaymentProvider {
 
     private static final String PRODUCT_CODE = "FAST_INSTANT_TRADE_PAY";
     private static final String ORDER_PREFIX = "RCG_";
+    private static final String PAYMENT_ORDER_PREFIX = "ORD_";
 
     @Resource
     private AlipayClient alipayClient;
@@ -40,6 +44,10 @@ public class AlipayPaymentProvider implements PaymentProvider {
 
     @Resource
     private RechargeService rechargeService;
+
+    @Lazy
+    @Resource
+    private PaymentOrderService paymentOrderService;
 
     @Override
     public PaymentMethodEnum getPaymentMethod() {
@@ -75,6 +83,36 @@ public class AlipayPaymentProvider implements PaymentProvider {
         } catch (AlipayApiException e) {
             log.error("创建支付宝支付表单失败：recordId={}", record.getId(), e);
             rechargeService.updateRechargeStatus(record.getId(), "failed", outTradeNo);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建支付宝支付失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public PaymentCreateResult createOrder(PaymentOrder order) {
+        try {
+            AlipayTradePagePayRequest request = new AlipayTradePagePayRequest();
+            request.setNotifyUrl(alipayPaymentConfig.getNotifyUrl());
+            request.setReturnUrl(alipayPaymentConfig.getReturnUrl());
+
+            AlipayTradePagePayModel model = new AlipayTradePagePayModel();
+            model.setOutTradeNo(order.getOrderNo());
+            model.setTotalAmount(order.getAmount().stripTrailingZeros().toPlainString());
+            model.setSubject("LeoAI Router " + order.getProductName());
+            model.setBody("订单号：" + order.getOrderNo());
+            model.setProductCode(PRODUCT_CODE);
+            request.setBizModel(model);
+
+            String formHtml = alipayClient.pageExecute(request).getBody();
+            log.info("支付宝统一订单下单成功：orderId={}, orderNo={}", order.getId(), order.getOrderNo());
+            return PaymentCreateResult.builder()
+                    .recordId(order.getId())
+                    .paymentMethod(PaymentMethodEnum.ALIPAY.getValue())
+                    .displayType(PaymentDisplayTypeEnum.FORM_HTML.getValue())
+                    .paymentId(order.getOrderNo())
+                    .formHtml(formHtml)
+                    .build();
+        } catch (AlipayApiException e) {
+            log.error("创建支付宝统一订单支付表单失败：orderId={}", order.getId(), e);
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建支付宝支付失败：" + e.getMessage());
         }
     }
@@ -130,6 +168,11 @@ public class AlipayPaymentProvider implements PaymentProvider {
         String outTradeNo = params.get("out_trade_no");
         String tradeNo = params.get("trade_no");
         String totalAmount = params.get("total_amount");
+
+        if (outTradeNo != null && outTradeNo.startsWith(PAYMENT_ORDER_PREFIX)) {
+            paymentOrderService.completeOrderByOrderNo(outTradeNo, tradeNo);
+            return true;
+        }
 
         Long recordId = parseRecordId(outTradeNo);
         RechargeRecord record = rechargeService.getById(recordId);

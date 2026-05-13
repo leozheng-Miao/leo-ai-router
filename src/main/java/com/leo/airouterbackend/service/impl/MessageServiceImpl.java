@@ -17,6 +17,7 @@ import com.leo.airouterbackend.model.entity.ModelProvider;
 import com.leo.airouterbackend.model.vo.MessageVO;
 import com.leo.airouterbackend.service.ChatService;
 import com.leo.airouterbackend.service.ConversationService;
+import com.leo.airouterbackend.service.EntitlementService;
 import com.leo.airouterbackend.service.MessageService;
 import com.leo.airouterbackend.service.ModelProviderService;
 import com.leo.airouterbackend.service.RoutingService;
@@ -60,6 +61,9 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
     private RoutingService routingService;
 
     @Resource
+    private EntitlementService entitlementService;
+
+    @Resource
     private ModelProviderService modelProviderService;
 
     @Resource
@@ -92,7 +96,7 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
         Conversation conversation = conversationService.validateOwner(userId, conversationId);
         int mode = normalizeMode(request);
         String userContent = normalizeContent(request);
-        Model selectedModel = resolveModel(request);
+        Model selectedModel = resolveModel(userId, request);
 
         saveMessage(conversationId, userId, ROLE_USER, userContent, mode);
         ChatRequest chatRequest = buildChatRequest(conversationId, mode, selectedModel, false);
@@ -110,7 +114,7 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
             Conversation conversation = conversationService.validateOwner(userId, conversationId);
             int mode = normalizeMode(request);
             String userContent = normalizeContent(request);
-            Model selectedModel = resolveModel(request);
+            Model selectedModel = resolveModel(userId, request);
 
             saveMessage(conversationId, userId, ROLE_USER, userContent, mode);
             ChatRequest chatRequest = buildChatRequest(conversationId, mode, selectedModel, true);
@@ -179,7 +183,7 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
         return null;
     }
 
-    private Model resolveModel(SendMessageRequest request) {
+    private Model resolveModel(Long userId, SendMessageRequest request) {
         String requestedModel = request == null ? null : request.getModel();
         String requestedStrategy = StrUtil.isNotBlank(requestedModel)
                 ? FIXED_ROUTING_STRATEGY
@@ -188,7 +192,22 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
         if (selectedModel == null || StrUtil.isBlank(selectedModel.getModelKey())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型");
         }
-        return selectedModel;
+        if (FIXED_ROUTING_STRATEGY.equals(requestedStrategy)) {
+            entitlementService.checkChatAccess(userId, selectedModel);
+            return selectedModel;
+        }
+        if (entitlementService.canUseChatAccess(userId, selectedModel)) {
+            return selectedModel;
+        }
+        List<Model> fallbackModels = routingService.getFallbackModels(requestedStrategy, "chat", requestedModel);
+        if (fallbackModels != null) {
+            for (Model fallbackModel : fallbackModels) {
+                if (fallbackModel != null && entitlementService.canUseChatAccess(userId, fallbackModel)) {
+                    return fallbackModel;
+                }
+            }
+        }
+        throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "今日聊天次数已用尽，请升级套餐或明日再试");
     }
 
     private boolean isDeepSeekModel(Model selectedModel) {

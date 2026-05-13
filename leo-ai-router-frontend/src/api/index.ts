@@ -18,6 +18,9 @@ import * as blacklistController from './blacklistController'
 import * as healthController from './healthController'
 import * as balanceController from './balanceController'
 import * as conversationController from './conversationController'
+import * as membershipController from './membershipController'
+import * as paymentOrderController from './paymentOrderController'
+import * as pointController from './pointController'
 export default {
   stripeWebhookController,
   imageController,
@@ -35,4 +38,7 @@ export default {
   healthController,
   balanceController,
   conversationController,
+  membershipController,
+  paymentOrderController,
+  pointController,
 }

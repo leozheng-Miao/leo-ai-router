@@ -133,6 +133,7 @@ const navItems = computed(() => {
     { label: '首页', path: '/' },
     { label: '在线对话', path: '/chat' },
     { label: 'AI 绘图', path: '/images' },
+    { label: '会员充值', path: '/membership' },
   ]
   if (loginUserStore.loginUser.userRole === 'admin') {
     items.splice(

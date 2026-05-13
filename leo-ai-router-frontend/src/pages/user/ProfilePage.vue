@@ -3,11 +3,11 @@
     <div class="page-header">
       <div>
         <div class="page-title">个人中心</div>
-        <div class="page-desc">管理账号信息、查看余额、充值概览、消费统计和每日趋势</div>
+        <div class="page-desc">管理账号信息、会员权益、积分流水和每日使用趋势</div>
       </div>
       <a-space wrap>
         <a-button size="large" @click="openBillDrawer">查看账单</a-button>
-        <a-button type="primary" size="large" @click="openRechargeModal">充值</a-button>
+        <a-button type="primary" size="large" @click="goMembership">会员充值</a-button>
       </a-space>
     </div>
 
@@ -20,6 +20,8 @@
           <div class="account-name">{{ profileForm.userName || loginUser.userAccount || '未命名用户' }}</div>
           <div class="account-meta">
             <a-tag>{{ loginUser.userRole || 'user' }}</a-tag>
+            <a-tag color="orange">{{ membership.planName || '免费版' }}</a-tag>
+            <a-tag color="green">积分 {{ formatNumber(membership.pointBalance) }}</a-tag>
             <a-tag :color="loginUser.hasPassword ? 'green' : 'orange'">
               {{ loginUser.hasPassword ? '已设置密码' : '未设置密码' }}
             </a-tag>
@@ -50,22 +52,6 @@
       </a-card>
     </div>
 
-    <a-card :bordered="false" class="wallet-card">
-      <div class="wallet-main">
-        <div>
-          <div class="wallet-label">账户资产</div>
-          <div class="wallet-balance">¥{{ formatCurrencyNumber(balanceInfo.balance) }}</div>
-          <div class="wallet-subtitle">
-            累计充值 ¥{{ formatCurrencyNumber(balanceInfo.totalRecharge) }}，累计消费 ¥{{ formatCurrencyNumber(balanceInfo.totalSpending) }}
-          </div>
-        </div>
-        <div class="wallet-actions">
-          <a-button type="primary" size="large" @click="openRechargeModal">立即充值</a-button>
-          <a-button size="large" @click="openBillDrawer">查看账单</a-button>
-        </div>
-      </div>
-    </a-card>
-
     <a-card :bordered="false" class="chart-card">
       <div class="chart-head">
         <div>
@@ -90,51 +76,64 @@
       <DailyStatsTrendChart :data="dailyStats" />
     </a-card>
 
-    <a-modal
-      v-model:open="rechargeModalOpen"
-      title="账户充值"
-      :confirm-loading="rechargeSubmitting"
-      ok-text="立即支付"
-      cancel-text="取消"
-      @ok="submitRecharge"
-    >
-      <a-form layout="vertical">
-        <a-form-item label="充值金额">
-          <a-input-number
-            v-model:value="rechargeForm.amount"
-            :min="1"
-            :max="10000"
-            :step="10"
-            addon-before="¥"
-            style="width: 100%"
-          />
-        </a-form-item>
-        <a-form-item label="快捷金额">
-          <div class="quick-amounts">
-            <button
-              v-for="value in quickAmounts"
-              :key="value"
-              type="button"
-              class="quick-chip"
-              :class="{ active: rechargeForm.amount === value }"
-              @click="rechargeForm.amount = value"
-            >
-              ¥{{ value }}
-            </button>
-          </div>
-        </a-form-item>
-        <a-form-item label="支付方式">
-          <a-radio-group v-model:value="rechargeForm.paymentMethod" class="pay-method-group">
-            <a-radio-button value="alipay">支付宝沙箱</a-radio-button>
-            <a-radio-button value="stripe">Stripe</a-radio-button>
-          </a-radio-group>
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
     <a-drawer v-model:open="billDrawerOpen" title="我的账单" width="960" @after-open-change="handleBillDrawerChange">
       <a-tabs v-model:activeKey="billTab">
-        <a-tab-pane key="recharge" tab="充值记录">
+        <a-tab-pane key="orders" tab="支付订单">
+          <a-table
+            row-key="id"
+            :columns="orderColumns"
+            :data-source="paymentOrders"
+            :loading="orderLoading"
+            :pagination="orderPagination"
+            @change="handleOrderTableChange"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'orderType'">
+                <a-tag :color="record.orderType === 'subscription' ? 'blue' : 'green'">
+                  {{ orderTypeTextMap[record.orderType ?? ''] || record.orderType || '-' }}
+                </a-tag>
+              </template>
+              <template v-else-if="column.key === 'amount'">¥{{ formatCurrencyNumber(record.amount) }}</template>
+              <template v-else-if="column.key === 'paymentMethod'">
+                <a-tag :color="paymentMethodColor(record.paymentMethod)">
+                  {{ paymentMethodTextMap[record.paymentMethod ?? ''] || record.paymentMethod || '-' }}
+                </a-tag>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="statusColorMap[record.status ?? 'pending'] || 'default'">
+                  {{ statusTextMap[record.status ?? 'pending'] || record.status || '-' }}
+                </a-tag>
+              </template>
+              <template v-else-if="column.key === 'createTime'">{{ formatTime(record.createTime) }}</template>
+            </template>
+          </a-table>
+        </a-tab-pane>
+        <a-tab-pane key="points" tab="积分流水">
+          <a-table
+            row-key="id"
+            :columns="pointTransactionColumns"
+            :data-source="pointTransactions"
+            :loading="pointTransactionLoading"
+            :pagination="pointTransactionPagination"
+            @change="handlePointTransactionTableChange"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'changeAmount'">
+                <span :class="Number(record.changeAmount ?? 0) >= 0 ? 'point-plus' : 'point-minus'">
+                  {{ formatSignedNumber(record.changeAmount) }}
+                </span>
+              </template>
+              <template v-else-if="column.key === 'transactionType'">
+                <a-tag :color="pointTransactionColorMap[record.transactionType ?? ''] || 'default'">
+                  {{ pointTransactionTypeTextMap[record.transactionType ?? ''] || record.transactionType || '-' }}
+                </a-tag>
+              </template>
+              <template v-else-if="column.key === 'balanceAfter'">{{ formatNumber(record.balanceAfter) }}</template>
+              <template v-else-if="column.key === 'createTime'">{{ formatTime(record.createTime) }}</template>
+            </template>
+          </a-table>
+        </a-tab-pane>
+        <a-tab-pane key="recharge" tab="旧充值记录">
           <a-table
             row-key="id"
             :columns="rechargeColumns"
@@ -157,7 +156,7 @@
             </template>
           </a-table>
         </a-tab-pane>
-        <a-tab-pane key="billing" tab="消费记录">
+        <a-tab-pane key="billing" tab="旧消费记录">
           <a-table
             row-key="id"
             :columns="billingColumns"
@@ -272,10 +271,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import DailyStatsTrendChart from '@/components/DailyStatsTrendChart.vue'
-import { getMyBalance, getMyBillingRecords } from '@/api/balanceController'
-import { createRecharge, getMyRechargeRecords } from '@/api/rechargeController'
+import { getMyBillingRecords } from '@/api/balanceController'
+import { getMyRechargeRecords } from '@/api/rechargeController'
+import { getMyMembership, type MembershipVO } from '@/api/membershipController'
+import { listMyPaymentOrders, type PaymentOrderVO } from '@/api/paymentOrderController'
+import { listMyPointTransactions } from '@/api/pointController'
 import { getMyDailyStats, getMySummaryStats } from '@/api/statsController'
-import { bindEmail, bindPhone, getLoginUser, getMyQuota, sendEmailBindCode, sendPhoneBindCode, setPassword, updateMyProfile } from '@/api/userController'
+import { bindEmail, bindPhone, getLoginUser, sendEmailBindCode, sendPhoneBindCode, setPassword, updateMyProfile } from '@/api/userController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { useEmailCodeCountdown } from '@/composables/useEmailCodeCountdown'
 
@@ -287,23 +289,33 @@ interface DailyStatPoint {
   totalCost: number
 }
 
+interface PointTransactionRecord {
+  id?: number
+  changeAmount?: number
+  balanceBefore?: number
+  balanceAfter?: number
+  transactionType?: string
+  description?: string
+  createTime?: string
+}
+
 const router = useRouter()
 const route = useRoute()
 const loginUserStore = useLoginUserStore()
 const loginUser = computed(() => loginUserStore.loginUser)
 const summary = ref<API.UserSummaryStatsVO>({})
-const quota = ref<API.QuotaVO>({})
-const balanceInfo = ref<API.BalanceVO>({})
+const membership = ref<MembershipVO>({})
 const dailyStats = ref<DailyStatPoint[]>([])
-const rechargeModalOpen = ref(false)
-const rechargeSubmitting = ref(false)
 const billDrawerOpen = ref(false)
-const billTab = ref('recharge')
+const billTab = ref('orders')
+const orderLoading = ref(false)
+const pointTransactionLoading = ref(false)
 const rechargeLoading = ref(false)
 const billingLoading = ref(false)
+const paymentOrders = ref<PaymentOrderVO[]>([])
+const pointTransactions = ref<PointTransactionRecord[]>([])
 const rechargeRecords = ref<API.RechargeRecord[]>([])
 const billingRecords = ref<API.BillingRecord[]>([])
-const quickAmounts = [10, 50, 100, 500]
 const profileModalOpen = ref(false)
 const passwordModalOpen = ref(false)
 const profileSaving = ref(false)
@@ -316,11 +328,6 @@ const emailBinding = ref(false)
 const phoneBinding = ref(false)
 const emailCountdown = useEmailCodeCountdown()
 const phoneCountdown = useEmailCodeCountdown()
-
-const rechargeForm = reactive({
-  amount: 100,
-  paymentMethod: 'alipay',
-})
 
 const profileForm = reactive({
   userName: '',
@@ -344,6 +351,22 @@ const phoneBindForm = reactive({
 })
 
 const rechargePagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showSizeChanger: true,
+  showTotal: (total: number) => `共 ${total} 条`,
+})
+
+const orderPagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showSizeChanger: true,
+  showTotal: (total: number) => `共 ${total} 条`,
+})
+
+const pointTransactionPagination = reactive({
   current: 1,
   pageSize: 10,
   total: 0,
@@ -382,7 +405,48 @@ const statusTextMap: Record<string, string> = {
   pending: '待支付',
   success: '成功',
   failed: '失败',
+  cancelled: '已取消',
+  coming_soon: '暂未开放',
   refunded: '已退款',
+}
+
+const orderTypeTextMap: Record<string, string> = {
+  subscription: '套餐',
+  points: '积分',
+}
+
+const paymentMethodTextMap: Record<string, string> = {
+  alipay: '支付宝',
+  stripe: 'Stripe',
+  wechat: '微信',
+}
+
+const pointTransactionTypeTextMap: Record<string, string> = {
+  purchase: '购买',
+  plan_bonus: '套餐赠送',
+  register_bonus: '注册赠送',
+  image_consume: '图片扣费',
+  admin_adjust: '管理员调整',
+}
+
+const pointTransactionColorMap: Record<string, string> = {
+  purchase: 'green',
+  plan_bonus: 'cyan',
+  register_bonus: 'blue',
+  image_consume: 'orange',
+  admin_adjust: 'purple',
+}
+
+const paymentMethodColor = (method?: string) => {
+  if (method === 'alipay') return 'blue'
+  if (method === 'stripe') return 'purple'
+  if (method === 'wechat') return 'green'
+  return 'default'
+}
+
+const formatSignedNumber = (value?: number) => {
+  const amount = Number(value ?? 0)
+  return amount > 0 ? `+${formatNumber(amount)}` : formatNumber(amount)
 }
 
 const rechargeColumns = [
@@ -400,16 +464,37 @@ const billingColumns = [
   { title: '时间', key: 'createTime', width: 180 },
 ]
 
+const orderColumns = [
+  { title: '商品', dataIndex: 'productName', key: 'productName' },
+  { title: '类型', key: 'orderType', width: 100 },
+  { title: '金额', key: 'amount', width: 120 },
+  { title: '支付方式', key: 'paymentMethod', width: 120 },
+  { title: '状态', key: 'status', width: 110 },
+  { title: '时间', key: 'createTime', width: 180 },
+]
+
+const pointTransactionColumns = [
+  { title: '积分变动', key: 'changeAmount', width: 130 },
+  { title: '类型', key: 'transactionType', width: 130 },
+  { title: '变动后余额', key: 'balanceAfter', width: 130 },
+  { title: '说明', dataIndex: 'description', key: 'description' },
+  { title: '时间', key: 'createTime', width: 180 },
+]
+
 const formatNumber = (value?: number) => (value ?? 0).toLocaleString('zh-CN')
-const formatCurrency = (value?: number) => `¥${formatCurrencyNumber(value)}`
 const formatCurrencyNumber = (value?: number) => Number(value ?? 0).toFixed(2)
 const formatQuota = (value?: number) => (value === -1 ? '无限制' : formatNumber(value))
 
 const summaryCards = computed(() => [
   {
-    title: 'Token 配额',
-    value: formatQuota(quota.value.tokenQuota),
-    extra: `已用 ${formatNumber(quota.value.usedTokens)} / 剩余 ${formatQuota(quota.value.remainingQuota)}`,
+    title: '会员套餐',
+    value: membership.value.planName || '免费版',
+    extra: `普通剩余 ${formatQuota(membership.value.dailyProRemaining)} / 高级剩余 ${formatQuota(membership.value.dailyAdvancedRemaining)}`,
+  },
+  {
+    title: '积分余额',
+    value: formatNumber(membership.value.pointBalance),
+    extra: '用于 AI 图片与视频生成',
   },
   {
     title: '累计 Token',
@@ -435,14 +520,13 @@ const formatTime = (value?: string) => {
 }
 
 const loadOverview = async () => {
-  const [userRes, summaryRes, quotaRes, balanceRes] = await Promise.all([getLoginUser(), getMySummaryStats(), getMyQuota(), getMyBalance()])
+  const [userRes, summaryRes, membershipRes] = await Promise.all([getLoginUser(), getMySummaryStats(), getMyMembership()])
   if (userRes.data.code === 0 && userRes.data.data) {
     loginUserStore.setLoginUser(userRes.data.data)
     syncProfileForm(userRes.data.data)
   }
   if (summaryRes.data.code === 0) summary.value = summaryRes.data.data ?? {}
-  if (quotaRes.data.code === 0) quota.value = quotaRes.data.data ?? {}
-  if (balanceRes.data.code === 0) balanceInfo.value = balanceRes.data.data ?? {}
+  if (membershipRes.data.code === 0) membership.value = membershipRes.data.data ?? {}
 }
 
 const syncProfileForm = (user: API.LoginUserVO) => {
@@ -470,6 +554,42 @@ const loadDailyStats = async () => {
     }))
   } else {
     message.error(res.data.message ?? '加载趋势失败')
+  }
+}
+
+const loadPaymentOrders = async () => {
+  orderLoading.value = true
+  try {
+    const res = await listMyPaymentOrders({
+      pageNum: orderPagination.current,
+      pageSize: orderPagination.pageSize,
+    })
+    if (res.data.code === 0 && res.data.data) {
+      paymentOrders.value = res.data.data.records ?? []
+      orderPagination.total = res.data.data.totalRow ?? 0
+    } else {
+      message.error(res.data.message ?? '加载支付订单失败')
+    }
+  } finally {
+    orderLoading.value = false
+  }
+}
+
+const loadPointTransactions = async () => {
+  pointTransactionLoading.value = true
+  try {
+    const res = await listMyPointTransactions({
+      pageNum: pointTransactionPagination.current,
+      pageSize: pointTransactionPagination.pageSize,
+    })
+    if (res.data.code === 0 && res.data.data) {
+      pointTransactions.value = res.data.data.records ?? []
+      pointTransactionPagination.total = res.data.data.totalRow ?? 0
+    } else {
+      message.error(res.data.message ?? '加载积分流水失败')
+    }
+  } finally {
+    pointTransactionLoading.value = false
   }
 }
 
@@ -514,18 +634,18 @@ const resetDateRange = () => {
   void loadDailyStats()
 }
 
-const openRechargeModal = () => {
-  rechargeModalOpen.value = true
+const goMembership = () => {
+  void router.push({ name: 'membership' })
 }
 
 const openBillDrawer = async () => {
   billDrawerOpen.value = true
-  await Promise.all([loadRechargeRecords(), loadBillingRecords()])
+  await Promise.all([loadPaymentOrders(), loadPointTransactions(), loadRechargeRecords(), loadBillingRecords()])
 }
 
 const handleBillDrawerChange = (open: boolean) => {
   if (open) return
-  billTab.value = 'recharge'
+  billTab.value = 'orders'
 }
 
 const handleRechargeTableChange = (pag: { current: number; pageSize: number }) => {
@@ -534,57 +654,22 @@ const handleRechargeTableChange = (pag: { current: number; pageSize: number }) =
   void loadRechargeRecords()
 }
 
+const handleOrderTableChange = (pag: { current: number; pageSize: number }) => {
+  orderPagination.current = pag.current
+  orderPagination.pageSize = pag.pageSize
+  void loadPaymentOrders()
+}
+
+const handlePointTransactionTableChange = (pag: { current: number; pageSize: number }) => {
+  pointTransactionPagination.current = pag.current
+  pointTransactionPagination.pageSize = pag.pageSize
+  void loadPointTransactions()
+}
+
 const handleBillingTableChange = (pag: { current: number; pageSize: number }) => {
   billingPagination.current = pag.current
   billingPagination.pageSize = pag.pageSize
   void loadBillingRecords()
-}
-
-const submitRecharge = async () => {
-  if (!rechargeForm.amount || rechargeForm.amount < 1 || rechargeForm.amount > 10000) {
-    message.warning('充值金额需在 1 - 10000 元之间')
-    return
-  }
-  rechargeSubmitting.value = true
-  try {
-    const res = await createRecharge({
-      amount: rechargeForm.amount,
-      paymentMethod: rechargeForm.paymentMethod,
-    })
-    if (res.data.code !== 0 || !res.data.data) {
-      message.error(res.data.message ?? '创建充值订单失败')
-      return
-    }
-    const { displayType, redirectUrl, formHtml } = res.data.data
-    rechargeModalOpen.value = false
-    if (displayType === 'redirect_url' && redirectUrl) {
-      window.location.href = redirectUrl
-      return
-    }
-    if (displayType === 'form_html' && formHtml) {
-      const payWindow = window.open('', '_blank')
-      if (!payWindow) {
-        message.warning('浏览器拦截了支付窗口，请允许弹窗后重试')
-        return
-      }
-      if (formHtml.includes('<form')) {
-        payWindow.document.open()
-        payWindow.document.write(formHtml)
-        payWindow.document.close()
-        return
-      }
-      if (/^https?:\/\//i.test(formHtml)) {
-        payWindow.location.href = formHtml
-        return
-      }
-      payWindow.close()
-      message.error('未获取到有效的支付宝支付表单')
-      return
-    }
-    message.error('未获取到有效的支付跳转信息')
-  } finally {
-    rechargeSubmitting.value = false
-  }
 }
 
 const submitProfile = async () => {
@@ -753,8 +838,7 @@ const handleRechargeRedirect = () => {
     return
   }
   if (route.query.openRecharge === '1') {
-    rechargeModalOpen.value = true
-    void router.replace({ name: 'profile', query: {} })
+    void router.replace({ name: 'membership' })
   }
 }
 
@@ -780,12 +864,6 @@ onMounted(() => {
 .summary-title { color: #64748b; font-size: 13px; }
 .summary-value { margin-top: 10px; font-size: 28px; font-weight: 700; color: #0f172a; }
 .summary-extra { margin-top: 10px; font-size: 12px; color: #94a3b8; line-height: 1.6; }
-.wallet-card { margin-bottom: 18px; border-radius: 22px; background: linear-gradient(135deg, #0f172a, #1e3a8a 55%, #38bdf8); color: #fff; }
-.wallet-main { display: flex; justify-content: space-between; gap: 20px; align-items: center; flex-wrap: wrap; }
-.wallet-label { font-size: 13px; color: rgba(255,255,255,0.72); text-transform: uppercase; letter-spacing: 0.08em; }
-.wallet-balance { margin-top: 10px; font-size: 40px; font-weight: 700; }
-.wallet-subtitle { margin-top: 8px; color: rgba(255,255,255,0.78); }
-.wallet-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .chart-card { border-radius: 18px; }
 .chart-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .card-title { font-size: 18px; font-weight: 700; color: #0f172a; }
@@ -793,10 +871,8 @@ onMounted(() => {
 .date-range { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
 .date-item { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #64748b; }
 .date-input { min-width: 160px; height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid #dbe4f0; background: #fff; }
-.quick-amounts { display: flex; gap: 10px; flex-wrap: wrap; }
-.quick-chip { height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid #dbe4f0; background: #f8fafc; color: #0f172a; cursor: pointer; transition: all 0.18s; }
-.quick-chip.active { border-color: #2563eb; background: #eff6ff; color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08); }
-.pay-method-group { width: 100%; }
-@media (max-width: 960px) { .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wallet-balance { font-size: 32px; } }
-@media (max-width: 640px) { .summary-grid { grid-template-columns: 1fr; } .wallet-actions { width: 100%; } .wallet-actions :deep(.ant-btn) { flex: 1; } }
+.point-plus { color: #059669; font-weight: 700; }
+.point-minus { color: #ea580c; font-weight: 700; }
+@media (max-width: 960px) { .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .summary-grid { grid-template-columns: 1fr; } }
 </style>

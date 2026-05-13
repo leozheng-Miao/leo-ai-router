@@ -7,7 +7,8 @@ import lombok.Getter;
 public enum PaymentMethodEnum {
 
     STRIPE("stripe", "Stripe"),
-    ALIPAY("alipay", "支付宝");
+    ALIPAY("alipay", "支付宝"),
+    WECHAT("wechat", "微信支付");
 
     private final String value;
 

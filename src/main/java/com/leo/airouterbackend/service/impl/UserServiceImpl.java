@@ -16,6 +16,7 @@ import com.leo.airouterbackend.model.enums.UserStatusEnum;
 import com.leo.airouterbackend.model.vo.LoginUserVO;
 import com.leo.airouterbackend.model.vo.UserVO;
 import com.leo.airouterbackend.service.AuthTokenService;
+import com.leo.airouterbackend.service.PointService;
 import com.leo.airouterbackend.service.RbacService;
 import com.leo.airouterbackend.service.UserService;
 import com.leo.airouterbackend.utils.AuthPasswordUtils;
@@ -25,6 +26,7 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,7 +53,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Resource
     private EmailService emailService;
 
+    @Resource
+    private PointService pointService;
+
+    private static final long REGISTER_BONUS_POINTS = 10L;
+
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public long userRegister(String userAccount, String userPassword, String checkPassword) {
         if (StrUtil.hasBlank(userAccount, userPassword, checkPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
@@ -83,6 +91,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "用户注册失败");
         }
         rbacService.ensureDefaultRole(user.getId(), UserRoleEnum.USER.getValue());
+        grantRegisterBonus(user.getId());
         return user.getId();
     }
 
@@ -113,6 +122,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public AuthLoginVO userLoginByEmail(String email, HttpServletRequest request) {
         QueryWrapper queryWrapper = QueryWrapper.create().eq("userEmail", email);
         User user = this.mapper.selectOneByQuery(queryWrapper);
@@ -131,12 +141,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 throw new BusinessException(ErrorCode.OPERATION_ERROR, "账号创建失败");
             }
             rbacService.ensureDefaultRole(user.getId(), UserRoleEnum.USER.getValue());
+            grantRegisterBonus(user.getId());
         }
         rbacService.ensureDefaultRole(user.getId(), user.getUserRole());
         return authTokenService.createLoginSession(user, request);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public long userRegisterByEmail(String email, String code, String userPassword, String checkPassword) {
         if (!userPassword.equals(checkPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "两次密码不一致");
@@ -163,7 +175,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "注册失败");
         }
         rbacService.ensureDefaultRole(user.getId(), UserRoleEnum.USER.getValue());
+        grantRegisterBonus(user.getId());
         return user.getId();
+    }
+
+    private void grantRegisterBonus(Long userId) {
+        pointService.grantPoints(userId, REGISTER_BONUS_POINTS, "register_bonus", "user", userId, "注册赠送积分");
     }
 
     @Override

@@ -534,6 +534,8 @@ declare namespace API {
     contextLength?: number
     inputPrice?: number
     outputPrice?: number
+    accessTier?: string
+    pointCost?: number
     status?: string
     priority?: number
     defaultTimeout?: number
@@ -563,6 +565,8 @@ declare namespace API {
     contextLength?: number
     inputPrice?: number
     outputPrice?: number
+    accessTier?: string
+    pointCost?: number
     status?: string
     priority?: number
     defaultTimeout?: number
@@ -582,6 +586,8 @@ declare namespace API {
     contextLength?: number
     inputPrice?: number
     outputPrice?: number
+    accessTier?: string
+    pointCost?: number
     status?: string
     healthStatus?: string
     avgLatency?: number

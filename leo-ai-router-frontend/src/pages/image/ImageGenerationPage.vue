@@ -26,16 +26,26 @@
                 v-for="item in imageModels"
                 :key="item.modelKey"
                 class="model-card"
-                :class="{ active: form.model === item.modelKey }"
+                :class="{ active: form.model === item.modelKey, disabled: !canUseImageModel(item) }"
               >
-                <input v-model="form.model" type="radio" :value="item.modelKey" class="model-radio" />
+                <input
+                  v-model="form.model"
+                  type="radio"
+                  :value="item.modelKey"
+                  :disabled="!canUseImageModel(item)"
+                  class="model-radio"
+                />
                 <div class="model-head">
                   <span class="model-name">{{ item.modelName || item.modelKey }}</span>
                   <span class="model-provider">{{ item.providerDisplayName || item.providerName }}</span>
                 </div>
                 <div class="model-meta">
                   <span>{{ item.description || '图片生成模型' }}</span>
-                  <span class="model-price">{{ formatPrice(item.inputPrice) }}</span>
+                  <span class="model-price">{{ formatPointCost(item) }}</span>
+                </div>
+                <div v-if="isMemberOnlyImageModel(item)" class="model-lock" :class="{ open: canUseImageModel(item) }">
+                  <LockOutlined />
+                  {{ canUseImageModel(item) ? '会员模型，当前可用' : '会员模型，请先开通套餐' }}
                 </div>
               </label>
             </a-radio-group>
@@ -62,20 +72,27 @@
           </div>
 
           <div class="estimate-box">
-            <div class="estimate-label">预估费用</div>
-            <div class="estimate-value">¥{{ estimatedCost }}</div>
+            <div class="estimate-label">预估积分</div>
+            <div class="estimate-value">{{ estimatedPoints }} 积分</div>
             <div class="estimate-desc">
-              当前按所选模型单张图片费用估算，实际扣费以服务端返回结果为准。
+              积分余额 {{ formatNumber(membership.pointBalance) }}，图片生成成功后扣除；失败不扣。
             </div>
           </div>
 
           <div class="generate-actions">
             <a-space>
-              <a-button type="primary" size="large" :loading="generating" @click="handleGenerate">
+              <a-button
+                type="primary"
+                size="large"
+                :loading="generating"
+                :disabled="!canGenerateImage"
+                @click="handleGenerate"
+              >
                 {{ generating ? '生成中...' : '立即生成' }}
               </a-button>
               <a-button size="large" @click="resetForm">重置</a-button>
             </a-space>
+            <div v-if="imageAccessWarning" class="access-warning">{{ imageAccessWarning }}</div>
           </div>
 
           <div v-if="latestPreview" class="latest-preview">
@@ -203,13 +220,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { DownloadOutlined, EyeOutlined } from '@ant-design/icons-vue'
+import { DownloadOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons-vue'
 import { generateImage, getMyRecords } from '@/api/imageController'
 import { listAvailableModels } from '@/api/modelController'
+import { getMyMembership, type MembershipVO } from '@/api/membershipController'
 
 const generating = ref(false)
 const historyLoading = ref(false)
 const imageModels = ref<API.ModelVO[]>([])
+const membership = ref<MembershipVO>({})
 const records = ref<API.ImageGenerationRecord[]>([])
 const latestPreview = ref('')
 const previewOpen = ref(false)
@@ -241,6 +260,11 @@ const selectedModel = computed(() =>
   imageModels.value.find((item) => item.modelKey === form.model),
 )
 
+const isPaidMember = computed(() => {
+  const planCode = membership.value.planCode
+  return Boolean(planCode && planCode !== 'free' && membership.value.status !== 'free')
+})
+
 const isGeminiImageModel = computed(() => {
   const providerName = selectedModel.value?.providerName?.toLowerCase?.() ?? ''
   return providerName === 'gemini' || providerName === 'google'
@@ -259,9 +283,51 @@ const sizeOptions = computed(() => {
   return defaultImageSizes
 })
 
-const estimatedCost = computed(() => Number(selectedModel.value?.inputPrice ?? 0).toFixed(2))
+const estimatedPoints = computed(() => Number(selectedModel.value?.pointCost ?? 0) * Number(form.n ?? 1))
+
+const canGenerateImage = computed(() => {
+  if (!selectedModel.value) {
+    return false
+  }
+  if (!canUseImageModel(selectedModel.value)) {
+    return false
+  }
+  return Number(membership.value.pointBalance ?? 0) >= estimatedPoints.value
+})
+
+const imageAccessWarning = computed(() => {
+  if (!selectedModel.value) {
+    return '请选择图片模型'
+  }
+  if (!canUseImageModel(selectedModel.value)) {
+    return '当前图片模型仅限会员使用，请先开通套餐'
+  }
+  if (Number(membership.value.pointBalance ?? 0) < estimatedPoints.value) {
+    return '积分余额不足，请先购买积分'
+  }
+  return ''
+})
 
 const formatPrice = (value?: number) => `¥${Number(value ?? 0).toFixed(2)} / 张`
+const formatNumber = (value?: number) => Number(value ?? 0).toLocaleString('zh-CN')
+const formatPointCost = (model: API.ModelVO) => {
+  const cost = Number(model.pointCost ?? 0)
+  return cost > 0 ? `${cost} 积分 / 张` : formatPrice(model.inputPrice)
+}
+
+const isMemberOnlyImageModel = (model?: API.ModelVO) => {
+  const providerName = model?.providerName?.toLowerCase?.() ?? ''
+  const modelKey = model?.modelKey?.toLowerCase?.() ?? ''
+  return providerName.includes('openai') || providerName.includes('gemini') || providerName.includes('google')
+    || modelKey.includes('gpt') || modelKey.includes('gemini')
+}
+
+const canUseImageModel = (model?: API.ModelVO) => {
+  if (!model) {
+    return false
+  }
+  return !isMemberOnlyImageModel(model) || isPaidMember.value
+}
 
 const formatTime = (value?: string) => {
   if (!value) return '-'
@@ -327,12 +393,19 @@ const loadModels = async () => {
     imageModels.value = (res.data.data ?? [])
       .filter((item) => item.modelType === 'image')
       .sort((a, b) => Number(a.inputPrice ?? 0) - Number(b.inputPrice ?? 0))
-    const firstModel = imageModels.value[0]
+    const firstModel = imageModels.value.find(canUseImageModel) ?? imageModels.value[0]
     if (!form.model && firstModel?.modelKey) {
       form.model = firstModel.modelKey
     }
   } else {
     message.error(res.data.message ?? '加载图片模型失败')
+  }
+}
+
+const loadMembership = async () => {
+  const res = await getMyMembership()
+  if (res.data.code === 0) {
+    membership.value = res.data.data ?? {}
   }
 }
 
@@ -370,6 +443,14 @@ const handleGenerate = async () => {
   }
   if (!form.model) {
     message.warning('请选择图片模型')
+    return
+  }
+  if (!selectedModel.value || !canUseImageModel(selectedModel.value)) {
+    message.warning('当前图片模型仅限会员使用，请先开通套餐')
+    return
+  }
+  if (Number(membership.value.pointBalance ?? 0) < estimatedPoints.value) {
+    message.warning('积分余额不足，请先购买积分')
     return
   }
   generating.value = true
@@ -470,7 +551,7 @@ const handlePageChange = (page: number, pageSize: number) => {
 }
 
 onMounted(() => {
-  void Promise.all([loadModels(), loadRecords()])
+  void Promise.all([loadMembership(), loadModels(), loadRecords()])
 })
 </script>
 
@@ -483,12 +564,15 @@ onMounted(() => {
 .model-group { width: 100%; display: grid; gap: 12px; }
 .model-card { display: block; position: relative; padding: 16px 18px; border-radius: 16px; border: 1px solid #dbe4f0; background: #fff; cursor: pointer; transition: all 0.18s; }
 .model-card.active { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08); background: #f8fbff; }
+.model-card.disabled { cursor: not-allowed; background: #f8fafc; border-style: dashed; opacity: 0.78; }
 .model-radio { position: absolute; opacity: 0; pointer-events: none; }
 .model-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .model-name { font-size: 16px; font-weight: 700; color: #0f172a; }
 .model-provider { font-size: 12px; color: #2563eb; background: #eff6ff; border-radius: 999px; padding: 4px 10px; }
 .model-meta { margin-top: 10px; display: flex; justify-content: space-between; gap: 12px; color: #64748b; font-size: 13px; }
 .model-price { color: #ea580c; font-weight: 700; }
+.model-lock { margin-top: 10px; display: flex; align-items: center; gap: 6px; color: #b45309; font-size: 12px; }
+.model-lock.open { color: #059669; }
 .config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .config-hint { margin-top: -2px; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: #f8fafc; color: #64748b; font-size: 12px; line-height: 1.7; border: 1px dashed #cbd5e1; }
 .estimate-box { margin-top: 10px; padding: 16px 18px; border-radius: 18px; background: linear-gradient(135deg, #0f172a, #1d4ed8); color: #fff; }
@@ -496,6 +580,7 @@ onMounted(() => {
 .estimate-value { margin-top: 8px; font-size: 34px; font-weight: 700; }
 .estimate-desc { margin-top: 8px; color: rgba(255,255,255,0.76); line-height: 1.7; }
 .generate-actions { margin-top: 18px; }
+.access-warning { margin-top: 10px; color: #b45309; font-size: 13px; }
 .latest-preview { margin-top: 22px; }
 .preview-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: #0f172a; font-weight: 600; }
 .preview-image { width: 100%; border-radius: 18px; background: #f1f5f9; border: 1px solid #dbe4f0; cursor: zoom-in; }

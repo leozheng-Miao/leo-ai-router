@@ -4,10 +4,12 @@ import com.leo.airouterbackend.config.StripeConfig;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
 import com.leo.airouterbackend.model.dto.payment.PaymentCreateResult;
+import com.leo.airouterbackend.model.entity.PaymentOrder;
 import com.leo.airouterbackend.model.entity.RechargeRecord;
 import com.leo.airouterbackend.model.enums.PaymentDisplayTypeEnum;
 import com.leo.airouterbackend.model.enums.PaymentMethodEnum;
 import com.leo.airouterbackend.service.RechargeService;
+import com.leo.airouterbackend.service.PaymentOrderService;
 import com.leo.airouterbackend.service.payment.PaymentProvider;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
@@ -17,6 +19,7 @@ import com.stripe.net.Webhook;
 import com.stripe.param.checkout.SessionCreateParams;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -30,6 +33,10 @@ public class StripePaymentProvider implements PaymentProvider {
 
     @Resource
     private RechargeService rechargeService;
+
+    @Lazy
+    @Resource
+    private PaymentOrderService paymentOrderService;
 
     @Override
     public PaymentMethodEnum getPaymentMethod() {
@@ -82,12 +89,63 @@ public class StripePaymentProvider implements PaymentProvider {
         }
     }
 
+    @Override
+    public PaymentCreateResult createOrder(PaymentOrder order) {
+        try {
+            long amountInCents = order.getAmount().multiply(new BigDecimal("100")).longValue();
+            SessionCreateParams params = SessionCreateParams.builder()
+                    .setMode(SessionCreateParams.Mode.PAYMENT)
+                    .setSuccessUrl(stripeConfig.getSuccessUrl() + "?session_id={CHECKOUT_SESSION_ID}&order_no=" + order.getOrderNo())
+                    .setCancelUrl(stripeConfig.getCancelUrl())
+                    .addLineItem(
+                            SessionCreateParams.LineItem.builder()
+                                    .setPriceData(
+                                            SessionCreateParams.LineItem.PriceData.builder()
+                                                    .setCurrency("cny")
+                                                    .setUnitAmount(amountInCents)
+                                                    .setProductData(
+                                                            SessionCreateParams.LineItem.PriceData.ProductData.builder()
+                                                                    .setName("LeoAI Router " + order.getProductName())
+                                                                    .setDescription("订单号：" + order.getOrderNo())
+                                                                    .build()
+                                                    )
+                                                    .build()
+                                    )
+                                    .setQuantity(1L)
+                                    .build()
+                    )
+                    .putMetadata("userId", order.getUserId().toString())
+                    .putMetadata("orderId", order.getId().toString())
+                    .putMetadata("orderNo", order.getOrderNo())
+                    .putMetadata("orderType", order.getOrderType())
+                    .putMetadata("amount", order.getAmount().toString())
+                    .build();
+            Session session = Session.create(params);
+            log.info("Stripe 统一订单下单成功：orderId={}, sessionId={}", order.getId(), session.getId());
+            return PaymentCreateResult.builder()
+                    .recordId(order.getId())
+                    .paymentMethod(PaymentMethodEnum.STRIPE.getValue())
+                    .displayType(PaymentDisplayTypeEnum.REDIRECT_URL.getValue())
+                    .paymentId(session.getId())
+                    .redirectUrl(session.getUrl())
+                    .build();
+        } catch (StripeException e) {
+            log.error("创建 Stripe 统一订单支付会话失败", e);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建 Stripe 支付会话失败：" + e.getMessage());
+        }
+    }
+
     public boolean handlePaymentSuccess(String sessionId) {
         try {
             Session session = Session.retrieve(sessionId);
             if (!"paid".equals(session.getPaymentStatus())) {
                 log.warn("Stripe 会话未支付成功：sessionId={}, status={}", sessionId, session.getPaymentStatus());
                 return false;
+            }
+            String orderNo = session.getMetadata().get("orderNo");
+            if (orderNo != null) {
+                paymentOrderService.completeOrderByOrderNo(orderNo, sessionId);
+                return true;
             }
             String recordIdStr = session.getMetadata().get("recordId");
             if (recordIdStr == null) {

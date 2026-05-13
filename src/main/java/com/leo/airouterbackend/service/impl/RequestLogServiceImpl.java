@@ -65,6 +65,7 @@ public class RequestLogServiceImpl implements RequestLogService {
                 .isFallback(logDTO.getIsFallback() != null && logDTO.getIsFallback() ? 1 : 0)
                 .clientIp(logDTO.getClientIp())
                 .userAgent(logDTO.getUserAgent())
+                .cost(logDTO.getCost() != null ? logDTO.getCost() : BigDecimal.ZERO)
                 .createTime(LocalDateTime.now())
                 .updateTime(LocalDateTime.now())
                 .build();

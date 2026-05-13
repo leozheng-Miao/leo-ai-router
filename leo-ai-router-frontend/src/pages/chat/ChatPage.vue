@@ -189,6 +189,24 @@
             <span class="toolbar-tip">策略会直接透传给后端路由</span>
           </div>
         </div>
+        <div class="quota-strip">
+          <div class="quota-pill">
+            <span>套餐</span>
+            <strong>{{ membership.planName || '免费版' }}</strong>
+          </div>
+          <div class="quota-pill">
+            <span>普通剩余</span>
+            <strong>{{ formatRemaining(membership.dailyProRemaining) }}</strong>
+          </div>
+          <div class="quota-pill">
+            <span>高级剩余</span>
+            <strong>{{ formatRemaining(membership.dailyAdvancedRemaining) }}</strong>
+          </div>
+          <div class="quota-pill">
+            <span>积分</span>
+            <strong>{{ formatNum(membership.pointBalance ?? 0) }}</strong>
+          </div>
+        </div>
         <div class="input-wrap">
           <a-textarea
             v-model:value="inputText"
@@ -219,6 +237,9 @@
           <span v-else-if="reasoningModelWarning" class="hint-warn"
             ><ExclamationCircleOutlined /> {{ reasoningModelWarning }}</span
           >
+          <span v-else-if="quotaWarning" class="hint-warn"
+            ><ExclamationCircleOutlined /> {{ quotaWarning }}</span
+          >
           <span v-else class="hint-ok"
             ><CheckCircleOutlined /> 当前使用网页端登录态聊天，{{ currentStrategyLabel }}已就绪</span
           >
@@ -243,7 +264,10 @@
         >
           <div class="model-card__head">
             <span class="model-card__title">{{ model.label }}</span>
-            <a-tag :color="model.tagColor">{{ model.provider }}</a-tag>
+            <a-space size="small">
+              <a-tag :color="tierTagColor(model.accessTier)">{{ tierLabel(model.accessTier) }}</a-tag>
+              <a-tag :color="model.tagColor">{{ model.provider }}</a-tag>
+            </a-space>
           </div>
           <div class="model-card__meta">
             <span>{{ model.fastLabel }}</span>
@@ -276,6 +300,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons-vue'
 import { listAvailableModels } from '@/api/modelController'
+import { getMyMembership, type MembershipVO } from '@/api/membershipController'
 import {
   createConversation,
   deleteConversation,
@@ -315,6 +340,8 @@ interface ModelOption {
   supportReasoning?: number
   avgLatency?: number
   modelType?: string
+  accessTier?: string
+  pointCost?: number
   capabilities?: string
   fastLabel: string
   reasoningLabel: string
@@ -369,6 +396,7 @@ const conversationError = ref('')
 
 const modelsLoading = ref(false)
 const models = ref<ModelOption[]>([])
+const membership = ref<MembershipVO>({})
 const loginUserStore = useLoginUserStore()
 
 const sessionStats = reactive({
@@ -404,15 +432,15 @@ const displayedModels = computed(() => {
   return models.value
 })
 
-const canSendMessage = computed(() => {
-  if (!inputText.value.trim()) {
-    return false
+const normalizeTier = (tier?: string) => {
+  const normalized = (tier || 'free').toLowerCase()
+  if (['advanced', 'pro', 'free', 'image', 'video'].includes(normalized)) {
+    return normalized
   }
-  if (selectedRoutingStrategy.value === 'fixed' && !selectedModel.value) {
-    return false
-  }
-  return true
-})
+  return 'free'
+}
+
+const hasRemaining = (value?: number) => value === undefined || value === -1 || value > 0
 
 const currentUserId = computed(() => {
   const id = Number(loginUserStore.loginUser.id)
@@ -424,6 +452,62 @@ const currentSelectedModel = computed(() => {
     return undefined
   }
   return models.value.find((item) => item.value === selectedModel.value)
+})
+
+const hasAnyChatRemaining = computed(() => {
+  return hasRemaining(membership.value.dailyProRemaining) || hasRemaining(membership.value.dailyAdvancedRemaining)
+})
+
+const selectedModelCanSend = computed(() => {
+  if (selectedRoutingStrategy.value !== 'fixed') {
+    return hasAnyChatRemaining.value
+  }
+  const model = currentSelectedModel.value
+  if (!model) {
+    return true
+  }
+  const tier = normalizeTier(model.accessTier)
+  if (tier === 'advanced') {
+    return hasRemaining(membership.value.dailyAdvancedRemaining)
+  }
+  if (tier === 'image' || tier === 'video') {
+    return false
+  }
+  return hasRemaining(membership.value.dailyProRemaining)
+})
+
+const quotaWarning = computed(() => {
+  if (selectedRoutingStrategy.value !== 'fixed') {
+    return hasAnyChatRemaining.value ? '' : '今日聊天次数已用尽，请升级套餐或明日再试'
+  }
+  const model = currentSelectedModel.value
+  if (!model) {
+    return ''
+  }
+  const tier = normalizeTier(model.accessTier)
+  if (tier === 'advanced' && !hasRemaining(membership.value.dailyAdvancedRemaining)) {
+    return '今日高级模型次数已用完，请切换普通模型或升级套餐'
+  }
+  if ((tier === 'free' || tier === 'pro') && !hasRemaining(membership.value.dailyProRemaining)) {
+    return '今日普通模型次数已用完，请升级套餐或明日再试'
+  }
+  if (tier === 'image' || tier === 'video') {
+    return '该模型不能用于聊天'
+  }
+  return ''
+})
+
+const canSendMessage = computed(() => {
+  if (!inputText.value.trim()) {
+    return false
+  }
+  if (selectedRoutingStrategy.value === 'fixed' && !selectedModel.value) {
+    return false
+  }
+  if (!selectedModelCanSend.value) {
+    return false
+  }
+  return true
 })
 
 const reasoningModelWarning = computed(() => {
@@ -456,6 +540,25 @@ const fillTip = (tip: string) => {
 
 // ───── 工具 ─────
 const formatNum = (n: number) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n))
+const formatRemaining = (value?: number) => (value === -1 ? '无限' : formatNum(Number(value ?? 0)))
+
+const tierLabel = (tier?: string) => {
+  const normalized = normalizeTier(tier)
+  if (normalized === 'advanced') return '高级'
+  if (normalized === 'pro') return '普通'
+  if (normalized === 'image') return '图片'
+  if (normalized === 'video') return '视频'
+  return '免费'
+}
+
+const tierTagColor = (tier?: string) => {
+  const normalized = normalizeTier(tier)
+  if (normalized === 'advanced') return 'purple'
+  if (normalized === 'pro') return 'blue'
+  if (normalized === 'image') return 'green'
+  if (normalized === 'video') return 'volcano'
+  return 'default'
+}
 
 const now = () => new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
@@ -894,6 +997,8 @@ const loadModels = async () => {
           supportReasoning: m.supportReasoning ?? 0,
           avgLatency: m.avgLatency ?? undefined,
           modelType: m.modelType ?? '',
+          accessTier: m.accessTier ?? 'free',
+          pointCost: m.pointCost ?? 0,
           capabilities: m.capabilities ?? '',
           fastLabel: m.avgLatency ? `${m.avgLatency} ms` : '延迟未知',
           reasoningLabel: m.supportReasoning === 1 ? '支持深度思考' : '标准模式',
@@ -907,6 +1012,17 @@ const loadModels = async () => {
     antMessage.error('加载模型列表失败')
   } finally {
     modelsLoading.value = false
+  }
+}
+
+const loadMembership = async () => {
+  try {
+    const res = await getMyMembership()
+    if (res.data.code === 0) {
+      membership.value = res.data.data ?? {}
+    }
+  } catch {
+    membership.value = {}
   }
 }
 
@@ -1042,6 +1158,7 @@ const sendMessageInternal = async () => {
     recalculateSessionStats()
     await loadMessages(conversationId)
     await loadConversations(conversationId)
+    await loadMembership()
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : '未知错误'
     antMessage.error('请求失败：' + errMsg)
@@ -1064,6 +1181,7 @@ const sendMessageInternal = async () => {
       })
     }
     await loadConversations(conversationId)
+    await loadMembership()
   } finally {
     isStreaming.value = false
     streamingContent.value = ''
@@ -1097,7 +1215,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 // ───── 初始化 ─────
 onMounted(() => {
   restoreChatSession()
-  void Promise.all([loadModels(), loadConversations()])
+  void Promise.all([loadModels(), loadConversations(), loadMembership()])
 })
 
 onBeforeUnmount(() => {
@@ -1775,6 +1893,36 @@ watch(selectedRoutingStrategy, (value) => {
   color: #94a3b8;
 }
 
+.quota-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.quota-pill {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.quota-pill span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.quota-pill strong {
+  color: #0f172a;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .model-trigger {
   border-radius: 999px;
   border-color: #cbd5e1;
@@ -1962,6 +2110,10 @@ watch(selectedRoutingStrategy, (value) => {
 
   .toolbar-left {
     width: 100%;
+  }
+
+  .quota-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

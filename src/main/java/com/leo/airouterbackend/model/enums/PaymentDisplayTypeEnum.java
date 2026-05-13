@@ -6,7 +6,8 @@ import lombok.Getter;
 public enum PaymentDisplayTypeEnum {
 
     REDIRECT_URL("redirect_url", "跳转链接"),
-    FORM_HTML("form_html", "表单直出");
+    FORM_HTML("form_html", "表单直出"),
+    DISABLED("disabled", "暂未开放");
 
     private final String value;
 

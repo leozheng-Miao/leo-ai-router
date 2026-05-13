@@ -49,6 +49,11 @@ public class ModelVO implements Serializable {
     private String modelType;
 
     /**
+     * 访问等级：free/pro/advanced/image/video
+     */
+    private String accessTier;
+
+    /**
      * 模型描述
      */
     private String description;
@@ -67,6 +72,11 @@ public class ModelVO implements Serializable {
      * 输出价格（元/千Token）
      */
     private BigDecimal outputPrice;
+
+    /**
+     * 积分成本：图片/视频单次消耗积分
+     */
+    private Integer pointCost;
 
     /**
      * 状态

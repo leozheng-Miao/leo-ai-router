@@ -19,6 +19,7 @@ import com.leo.airouterbackend.model.vo.PluginExecuteVO;
 import com.leo.airouterbackend.service.BalanceService;
 import com.leo.airouterbackend.service.BillingService;
 import com.leo.airouterbackend.service.ChatService;
+import com.leo.airouterbackend.service.EntitlementService;
 import com.leo.airouterbackend.service.ModelInvokeService;
 import com.leo.airouterbackend.service.ModelProviderService;
 import com.leo.airouterbackend.service.PluginService;
@@ -67,10 +68,16 @@ public class ChatServiceImpl implements ChatService {
     private RbacService rbacService;
     @Resource
     private UsageLimitService usageLimitService;
+    @Resource
+    private EntitlementService entitlementService;
     /**
      * 最大 Fallback 重试次数
      */
     private static final int MAX_FALLBACK_RETRIES = 3;
+    private static final String FIXED_ROUTING_STRATEGY = "fixed";
+
+    private record SelectedRoute(Model primaryModel, List<Model> fallbackModels) {
+    }
 
     @Override
     public ChatResponse chat(ChatRequest chatRequest, Long userId, Long apiKeyId, String clientIp, String userAgent) {
@@ -82,20 +89,6 @@ public class ChatServiceImpl implements ChatService {
             throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务");
         }
 
-        // 检查用户配额
-        if (userId != null && !quotaService.checkQuota(userId)) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额");
-        }
-
-        // 检查用户余额（预估检查，实际扣减在调用成功后）
-        if (userId != null) {
-            java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
-            if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
-                throw new BusinessException(ErrorCode.OPERATION_ERROR,
-                        "账户余额不足，当前余额：¥" + currentBalance + "，请先充值");
-            }
-        }
-
         // 如果指定了插件，先执行插件获取上下文，然后注入到消息中
         if (StrUtil.isNotBlank(chatRequest.getPluginKey())) {
             chatRequest = injectPluginContext(chatRequest, userId);
@@ -103,9 +96,8 @@ public class ChatServiceImpl implements ChatService {
 
         String strategyType = determineStrategyType(chatRequest.getRoutingStrategy(), requestModel);
 
-        Model selectModel = routingService.selectModel(strategyType, "chat", requestModel);
-        if (selectModel == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型");
-        checkChatPermission(userId, selectModel);
+        SelectedRoute selectedRoute = selectEntitledRoute(userId, strategyType, requestModel);
+        Model selectModel = selectedRoute.primaryModel();
 
         // 检查用户是否配置了 BYOK（提前检查，避免不必要的余额检查）
         boolean willUseByok = false;
@@ -113,28 +105,16 @@ public class ChatServiceImpl implements ChatService {
             willUseByok = userProviderKeyService.hasUserProviderKey(userId, selectModel.getProviderId());
         }
 
-        // BYOK 模式下不检查配额和余额
+        // BYOK 模式下不扣平台余额，但仍需套餐权益校验
         if (!willUseByok) {
-            // 检查用户配额
-            if (userId != null && !quotaService.checkQuota(userId)) {
-                throw new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额");
-            }
-
-            // 检查用户余额（预估检查，实际扣减在调用成功后）
-            if (userId != null) {
-                java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
-                if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
-                    throw new BusinessException(ErrorCode.OPERATION_ERROR,
-                            "账户余额不足，当前余额：¥" + currentBalance + "，请先充值");
-                }
-            }
+            log.debug("平台密钥模式：用户 {} 使用套餐权益调用模型 {}", userId, selectModel.getModelKey());
         } else {
-            log.info("BYOK 模式：用户 {} 跳过余额和配额检查", userId);
+            log.info("BYOK 模式：用户 {} 跳过平台余额扣费", userId);
         }
 
         //TODO: 从缓存获取相应
 
-        List<Model> fallbackModels = routingService.getFallbackModels(strategyType, "chat", requestModel);
+        List<Model> fallbackModels = selectedRoute.fallbackModels();
         boolean isFallback = false;
 
         try {
@@ -204,6 +184,7 @@ public class ChatServiceImpl implements ChatService {
     private ChatResponse callModel(Model model, ChatRequest chatRequest, Long userId, Long apiKeyId,
                                    String traceId, long startTime, String strategyType, boolean isFallback,
                                    String clientIp, String userAgent) {
+        checkChatPermission(userId, model);
         // 获取提供者信息
         ModelProvider provider = modelProviderService.getById(model.getProviderId());
         if (provider == null) {
@@ -244,6 +225,7 @@ public class ChatServiceImpl implements ChatService {
             int promptTokens = response.getUsage().getPromptTokens();
             int completionTokens = response.getUsage().getCompletionTokens();
             int totalTokens = response.getUsage().getTotalTokens();
+            java.math.BigDecimal cost = billingService.calculateCost(model, promptTokens, completionTokens);
             requestLogService.logRequest(RequestLogDTO.builder()
                     .traceId(traceId)
                     .userId(userId)
@@ -255,6 +237,7 @@ public class ChatServiceImpl implements ChatService {
                     .promptTokens(response.getUsage().getPromptTokens())
                     .completionTokens(response.getUsage().getCompletionTokens())
                     .totalTokens(response.getUsage().getTotalTokens())
+                    .cost(cost)
                     .duration((int) duration)
                     .status("success")
                     .routingStrategy(strategyType)
@@ -266,26 +249,12 @@ public class ChatServiceImpl implements ChatService {
             aiMetricsCollector.recordRequest(model.getModelKey(), userId, apiKeyId != null ? apiKeyId.toString() : null);
             aiMetricsCollector.recordTokens(model.getModelKey(), totalTokens);
             aiMetricsCollector.recordResponseTime(model.getModelKey(), duration);
-            // 扣减用户配额和余额
-            if (userId != null && totalTokens > 0 && !isByok) {
-                quotaService.deductTokens(userId, totalTokens);
-
-                // 计算费用并扣减余额
-                java.math.BigDecimal cost = billingService.calculateCost(
-                        model,
-                        response.getUsage().getPromptTokens(),
-                        response.getUsage().getCompletionTokens()
-                );
-
-                if (cost.compareTo(java.math.BigDecimal.ZERO) > 0) {
-                    // 根据来源区分描述
-                    String description = apiKeyId != null
-                            ? "API调用消费 - " + model.getModelKey()
-                            : "网页调用消费 - " + model.getModelKey();
-                    balanceService.deductBalance(userId, cost, null, description);
-                }
-            } else if (isByok) {
-                log.info("BYOK 模式：用户 {} 使用自己的密钥，不扣减余额和配额", userId);
+            // 聊天/API 中转消耗套餐次数，不消耗积分或余额
+            if (userId != null && !isByok) {
+                entitlementService.recordChatUsage(userId, model);
+            }
+            if (userId != null && isByok) {
+                log.info("BYOK 模式：用户 {} 使用自己的密钥，不扣减平台次数", userId);
             }
 
 
@@ -329,19 +298,6 @@ public class ChatServiceImpl implements ChatService {
             return Flux.error(new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被禁用，无法使用服务"));
         }
 
-        // 检查用户配额
-        if (userId != null && !quotaService.checkQuota(userId)) {
-            return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额"));
-        }
-
-        // 检查用户余额（预估检查）
-        if (userId != null) {
-            java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
-            if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
-                return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR,
-                        "账户余额不足，当前余额：¥" + currentBalance + "，请先充值"));
-            }
-        }
         // Token 计数器
         final int[] promptTokens = {0};
         final int[] completionTokens = {0};
@@ -354,13 +310,8 @@ public class ChatServiceImpl implements ChatService {
             // 确定路由策略：优先使用请求中指定的策略，否则根据是否指定模型决定
             String strategyType = determineStrategyType(chatRequest.getRoutingStrategy(), requestedModel);
 
-            // 选择模型（策略内部查询数据库）
-            Model selectedModel = routingService.selectModel(strategyType, "chat", requestedModel);
-
-            if (selectedModel == null) {
-                return Flux.error(new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型"));
-            }
-            checkChatPermission(userId, selectedModel);
+            SelectedRoute selectedRoute = selectEntitledRoute(userId, strategyType, requestedModel);
+            Model selectedModel = selectedRoute.primaryModel();
 
             // 获取提供者信息
             ModelProvider provider = modelProviderService.getById(selectedModel.getProviderId());
@@ -388,23 +339,11 @@ public class ChatServiceImpl implements ChatService {
                 }
             }
 
-            // BYOK 模式下不检查配额和余额
+            // BYOK 模式下不扣平台余额，但仍需套餐权益校验
             if (!isByok[0]) {
-                // 检查用户配额
-                if (userId != null && !quotaService.checkQuota(userId)) {
-                    return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR, "Token配额已用尽，请联系管理员增加配额"));
-                }
-
-                // 检查用户余额（预估检查）
-                if (userId != null) {
-                    java.math.BigDecimal currentBalance = balanceService.getUserBalance(userId);
-                    if (currentBalance.compareTo(java.math.BigDecimal.ZERO) <= 0) {
-                        return Flux.error(new BusinessException(ErrorCode.OPERATION_ERROR,
-                                "账户余额不足，当前余额：¥" + currentBalance + "，请先充值"));
-                    }
-                }
+                log.debug("平台密钥模式：用户 {} 使用套餐权益调用流式模型 {}", userId, selectedModel.getModelKey());
             } else {
-                log.info("BYOK 模式：跳过余额和配额检查");
+                log.info("BYOK 模式：跳过平台余额扣费");
             }
 
             // 调用流式模型，获取统一格式的响应块
@@ -479,6 +418,7 @@ public class ChatServiceImpl implements ChatService {
                         // 流结束时记录日志
                         long duration = System.currentTimeMillis() - startTime;
                         int totalTokens = promptTokens[0] + completionTokens[0];
+                        java.math.BigDecimal cost = billingService.calculateCost(selectedModel, promptTokens[0], completionTokens[0]);
                         requestLogService.logRequest(RequestLogDTO.builder()
                                 .traceId(traceId)
                                 .userId(userId)
@@ -490,6 +430,7 @@ public class ChatServiceImpl implements ChatService {
                                 .promptTokens(promptTokens[0])
                                 .completionTokens(completionTokens[0])
                                 .totalTokens(totalTokens)
+                                .cost(cost)
                                 .duration((int) duration)
                                 .status("success")
                                 .routingStrategy(strategyType)
@@ -503,26 +444,12 @@ public class ChatServiceImpl implements ChatService {
                         aiMetricsCollector.recordTokens(selectedModel.getModelKey(), totalTokens);
                         aiMetricsCollector.recordResponseTime(selectedModel.getModelKey(), duration);
 
-                        // 扣减用户配额和余额
-                        if (userId != null && totalTokens > 0 && !isByok[0]) {
-                            quotaService.deductTokens(userId, totalTokens);
-
-                            // 计算费用并扣减余额
-                            java.math.BigDecimal cost = billingService.calculateCost(
-                                    selectedModel,
-                                    promptTokens[0],
-                                    completionTokens[0]
-                            );
-
-                            if (cost.compareTo(java.math.BigDecimal.ZERO) > 0) {
-                                // 根据来源区分描述
-                                String description = apiKeyId != null
-                                        ? "API调用消费（流式） - " + selectedModel.getModelKey()
-                                        : "网页调用消费（流式） - " + selectedModel.getModelKey();
-                                balanceService.deductBalance(userId, cost, null, description);
-                            }
-                        } else if (isByok[0]) {
-                            log.info("BYOK 模式（流式）：用户 {} 使用自己的密钥，不扣减余额和配额", userId);
+                        // 聊天/API 中转消耗套餐次数，不消耗积分或余额
+                        if (userId != null && !isByok[0]) {
+                            entitlementService.recordChatUsage(userId, selectedModel);
+                        }
+                        if (userId != null && isByok[0]) {
+                            log.info("BYOK 模式（流式）：用户 {} 使用自己的密钥，不扣减平台次数", userId);
                         }
                     }).doOnError(error -> {
                         // 流错误时记录日志
@@ -546,6 +473,8 @@ public class ChatServiceImpl implements ChatService {
                                 .userAgent(userAgent)
                                 .build());
                     });
+        } catch (BusinessException e) {
+            return Flux.error(e);
         } catch (Exception e) {
             log.error("流式调用模型失败", e);
             return Flux.error(new BusinessException(ErrorCode.SYSTEM_ERROR, "流式调用模型失败: " + e.getMessage()));
@@ -589,11 +518,62 @@ public class ChatServiceImpl implements ChatService {
         if (userId == null) {
             return;
         }
-        if (!rbacService.hasPermission(userId, PermissionConstant.CHAT_USE)
-                || !rbacService.hasPermission(userId, PermissionConstant.MODEL_USE_PREFIX + model.getModelKey())) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "当前角色无权使用该模型");
+        checkChatRole(userId);
+        entitlementService.checkChatAccess(userId, model);
+    }
+
+    private void checkChatRole(Long userId) {
+        if (userId != null && !rbacService.hasPermission(userId, PermissionConstant.CHAT_USE)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "当前角色无权使用聊天功能");
         }
-        usageLimitService.checkAndRecordChat(userId);
+    }
+
+    private SelectedRoute selectEntitledRoute(Long userId, String strategyType, String requestedModel) {
+        Model selectedModel = routingService.selectModel(strategyType, "chat", requestedModel);
+        if (selectedModel == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "没有可用的模型");
+        }
+        List<Model> fallbackModels = routingService.getFallbackModels(strategyType, "chat", requestedModel);
+        if (FIXED_ROUTING_STRATEGY.equals(strategyType)) {
+            checkChatPermission(userId, selectedModel);
+            return new SelectedRoute(selectedModel, filterEntitledModels(userId, fallbackModels, selectedModel.getModelKey()));
+        }
+
+        checkChatRole(userId);
+        List<Model> candidates = new ArrayList<>();
+        candidates.add(selectedModel);
+        if (fallbackModels != null) {
+            candidates.addAll(fallbackModels);
+        }
+        List<Model> entitledModels = filterEntitledModels(userId, candidates, null);
+        if (entitledModels.isEmpty()) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "今日聊天次数已用尽，请升级套餐或明日再试");
+        }
+        Model primary = entitledModels.getFirst();
+        return new SelectedRoute(primary, entitledModels.stream()
+                .skip(1)
+                .filter(model -> !primary.getModelKey().equals(model.getModelKey()))
+                .toList());
+    }
+
+    private List<Model> filterEntitledModels(Long userId, List<Model> models, String excludeModelKey) {
+        if (models == null || models.isEmpty()) {
+            return List.of();
+        }
+        List<Model> result = new ArrayList<>();
+        for (Model model : models) {
+            if (model == null || StrUtil.isBlank(model.getModelKey())) {
+                continue;
+            }
+            if (StrUtil.isNotBlank(excludeModelKey) && excludeModelKey.equals(model.getModelKey())) {
+                continue;
+            }
+            boolean exists = result.stream().anyMatch(item -> model.getModelKey().equals(item.getModelKey()));
+            if (!exists && entitlementService.canUseChatAccess(userId, model)) {
+                result.add(model);
+            }
+        }
+        return result;
     }
 
     /**

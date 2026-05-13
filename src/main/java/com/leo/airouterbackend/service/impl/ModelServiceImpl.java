@@ -4,7 +4,6 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.leo.airouterbackend.mapper.ModelMapper;
-import com.leo.airouterbackend.constant.PermissionConstant;
 import com.leo.airouterbackend.model.dto.model.ModelQueryRequest;
 import com.leo.airouterbackend.model.entity.Model;
 import com.leo.airouterbackend.model.entity.ModelProvider;
@@ -12,7 +11,6 @@ import com.leo.airouterbackend.model.enums.ModelStatusEnum;
 import com.leo.airouterbackend.model.vo.ModelVO;
 import com.leo.airouterbackend.service.ModelProviderService;
 import com.leo.airouterbackend.service.ModelService;
-import com.leo.airouterbackend.service.RbacService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.update.UpdateChain;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
@@ -35,9 +33,6 @@ public class ModelServiceImpl extends ServiceImpl<ModelMapper, Model> implements
 
     @Resource
     private ModelProviderService modelProviderService;
-
-    @Resource
-    private RbacService rbacService;
 
     @Override
     public QueryWrapper getQueryWrapper(ModelQueryRequest modelQueryRequest) {
@@ -133,13 +128,7 @@ public class ModelServiceImpl extends ServiceImpl<ModelMapper, Model> implements
 
     @Override
     public List<Model> getAvailableModels(Long userId) {
-        List<Model> activeModels = getActiveModels();
-        if (userId == null) {
-            return new ArrayList<>();
-        }
-        return activeModels.stream()
-                .filter(model -> rbacService.hasPermission(userId, PermissionConstant.MODEL_USE_PREFIX + model.getModelKey()))
-                .collect(Collectors.toList());
+        return getActiveModels();
     }
 
     @Override
