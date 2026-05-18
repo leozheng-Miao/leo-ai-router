@@ -1,6 +1,7 @@
 // @ts-ignore
 /* eslint-disable */
 import request from '@/request'
+import { getAccessToken } from '@/utils/authToken'
 
 export type ConversationVO = {
   id?: number
@@ -113,10 +114,12 @@ export async function streamConversationMessage(
   body: SendMessageRequest,
 ) {
   const baseURL = String(request.defaults.baseURL ?? '')
+  const token = getAccessToken()
   return fetch(`${baseURL}/conversations/${conversationId}/messages/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...buildUserHeader(userId),
     },
     credentials: 'include',
