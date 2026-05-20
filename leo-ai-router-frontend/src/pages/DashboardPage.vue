@@ -153,7 +153,11 @@ const endDate = formatDate(new Date())
 const startDate = formatDate(addDays(new Date(), -6))
 
 const todayPoint = computed(() => dailyStats.value.find((item) => item.date === endDate))
-const hasDailyStats = computed(() => dailyStats.value.length > 0)
+const hasDailyStats = computed(() =>
+  dailyStats.value.some((item) =>
+    [item.requestCount, item.successCount, item.totalTokens, item.totalCost].some((value) => toFiniteNumber(value) > 0),
+  ),
+)
 const hasSummary = computed(() =>
   [
     summary.value.totalTokens,
@@ -235,6 +239,13 @@ function normalizeDailyStats(items?: Record<string, any>[]) {
   }))
 }
 
+function ensureSuccess<T>(response: { data: { code?: number; message?: string; data?: T } }) {
+  if (response.data.code !== 0) {
+    throw new Error(response.data.message || '控制台数据加载失败')
+  }
+  return response.data.data
+}
+
 function formatNumber(value?: number) {
   return toFiniteNumber(value).toLocaleString('zh-CN')
 }
@@ -277,20 +288,12 @@ async function loadDashboard() {
       listAvailableModels(),
     ])
 
-    if (summaryRes.data.code === 0) {
-      summary.value = summaryRes.data.data ?? {}
-    }
-    if (dailyRes.data.code === 0) {
-      dailyStats.value = normalizeDailyStats(dailyRes.data.data)
-    }
-    if (membershipRes.data.code === 0) {
-      membership.value = membershipRes.data.data ?? {}
-    }
-    if (modelsRes.data.code === 0) {
-      models.value = modelsRes.data.data ?? []
-    }
-  } catch {
-    error.value = '控制台数据加载失败'
+    summary.value = ensureSuccess(summaryRes) ?? {}
+    dailyStats.value = normalizeDailyStats(ensureSuccess(dailyRes))
+    membership.value = ensureSuccess(membershipRes) ?? {}
+    models.value = ensureSuccess(modelsRes) ?? []
+  } catch (loadError) {
+    error.value = loadError instanceof Error ? loadError.message : '控制台数据加载失败'
   } finally {
     loading.value = false
   }
