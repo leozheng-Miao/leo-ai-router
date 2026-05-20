@@ -1,664 +1,795 @@
 <template>
-  <div class="home-page">
-    <!-- Hero -->
-    <section class="hero">
-      <div class="hero-badge">
-        <span class="badge-dot"></span>
-        支持 DeepSeek · 通义千问 · GLM · 更多模型持续接入
-      </div>
-      <h1 class="hero-title">
-        统一接入，智能路由<br />
-        <span class="hero-gradient">多种主流 AI 模型</span>
-      </h1>
-      <p class="hero-subtitle">
-        兼容 OpenAI 协议 · 一个 API Key 调用全部模型<br />
-        成本优先 / 延迟优先 / 自动 Fallback，开箱即用
-      </p>
-      <div class="hero-actions">
-        <template v-if="loginUserStore.loginUser.id">
-          <RouterLink to="/dashboard" class="btn-primary">
-            <DashboardOutlined /> 进入控制台
-          </RouterLink>
-        </template>
-        <template v-else>
-          <RouterLink to="/user/register" class="btn-primary"> 免费开始使用 → </RouterLink>
-          <RouterLink to="/user/login" class="btn-secondary">登录账号</RouterLink>
-        </template>
-      </div>
-
-      <!-- Code preview -->
-      <div class="hero-code">
-        <div class="code-header">
-          <div class="code-dots">
-            <span class="dot red"></span>
-            <span class="dot yellow"></span>
-            <span class="dot green"></span>
+  <main class="home-page">
+    <section class="hero-section">
+      <div class="home-shell hero-grid">
+        <div class="hero-copy">
+          <div class="hero-badge">
+            <span class="hero-badge__dot"></span>
+            统一 AI 模型网关
           </div>
-          <span class="code-title">快速接入示例</span>
-          <a-tag color="green" style="margin-left: auto; font-size: 11px">兼容 OpenAI SDK</a-tag>
-        </div>
-        <pre
-          class="code-body"
-        ><code><span class="c-keyword">from</span> openai <span class="c-keyword">import</span> OpenAI
-
-client = OpenAI(
-    api_key=<span class="c-str">"sk-your-leo-api-key"</span>,
-    base_url=<span class="c-str">"https://api.leoai.cn/v1"</span>
-)
-
-response = client.chat.completions.create(
-    model=<span class="c-str">"auto"</span>,  <span class="c-comment"># 自动路由到最优模型</span>
-    messages=[{<span class="c-str">"role"</span>: <span class="c-str">"user"</span>, <span class="c-str">"content"</span>: <span class="c-str">"Hello!"</span>}]
-)</code></pre>
-      </div>
-    </section>
-
-    <!-- Stats -->
-    <section class="stats-section">
-      <div class="container">
-        <div class="stats-grid">
-          <div v-for="stat in stats" :key="stat.label" class="stat-item">
-            <div class="stat-value">{{ stat.value }}</div>
-            <div class="stat-label">{{ stat.label }}</div>
+          <h1 class="hero-title">一次接入，智能调度多家主流 AI 模型</h1>
+          <p class="hero-desc">
+            Leo AI Router 面向开发者和团队提供统一模型访问、智能路由、Fallback
+            容灾与 OpenAI 协议兼容能力，让现有 SDK 调用可以平滑迁移到多模型体系。
+          </p>
+          <div class="hero-points" aria-label="核心能力">
+            <span>OpenAI SDK 兼容</span>
+            <span>成本/延迟/可用性路由</span>
+            <span>统一 Key 管理</span>
+          </div>
+          <div class="hero-actions">
+            <RouterLink v-if="isLoggedIn" to="/dashboard" class="action action--primary">
+              <DashboardOutlined />
+              进入控制台
+            </RouterLink>
+            <template v-else>
+              <RouterLink to="/user/register" class="action action--primary">
+                开始使用
+                <ArrowRightOutlined />
+              </RouterLink>
+              <RouterLink to="/user/login" class="action action--secondary">登录账号</RouterLink>
+            </template>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- Features -->
-    <section class="features-section">
-      <div class="container">
-        <div class="section-header">
-          <div class="section-label">核心能力</div>
-          <h2 class="section-title">为开发者和企业设计的 AI 网关</h2>
-          <p class="section-desc">从接入到上线，一站式解决模型调用、稳定性、可观测性问题</p>
-        </div>
-        <div class="features-grid">
-          <div v-for="f in features" :key="f.title" class="feature-card">
-            <div class="feature-icon" :style="{ background: f.iconBg }">
-              <component :is="f.icon" :style="{ color: f.iconColor, fontSize: '20px' }" />
+        <div class="code-panel" aria-label="OpenAI SDK base_url 示例">
+          <div class="code-panel__top">
+            <div class="code-tabs">
+              <span class="code-tab code-tab--active">Python</span>
+              <span class="code-tab">Node.js</span>
+              <span class="code-tab">REST</span>
             </div>
-            <h3 class="feature-title">{{ f.title }}</h3>
-            <p class="feature-desc">{{ f.desc }}</p>
-            <ul class="feature-list">
-              <li v-for="point in f.points" :key="point">
-                <CheckCircleFilled class="check-icon" />
-                {{ point }}
-              </li>
-            </ul>
+            <span class="code-label">OpenAI Compatible</span>
+          </div>
+          <pre class="code-block"><code><span v-for="line in sdkCode" :key="line">{{ line }}
+</span></code></pre>
+          <div class="code-footer">
+            <span>base_url</span>
+            <strong>https://api.leoai.cn/v1</strong>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Models -->
-    <section class="models-section">
-      <div class="container">
-        <div class="section-header">
-          <div class="section-label">已接入模型</div>
-          <h2 class="section-title">覆盖主流大模型，持续扩展</h2>
+    <section class="home-shell section-block" aria-label="模型健康状态">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">Model Health</span>
+          <h2>模型状态概览</h2>
         </div>
-        <div class="models-grid">
-          <div v-for="m in models" :key="m.name" class="model-card">
-            <div class="model-logo" :style="{ background: m.bg }">{{ m.abbr }}</div>
-            <div class="model-info">
-              <div class="model-name">{{ m.name }}</div>
-              <div class="model-desc">{{ m.desc }}</div>
+        <p>以下为产品展示数据，用于说明平台可观测能力，并非实时运行指标。</p>
+      </div>
+      <div class="model-health-grid">
+        <ModelStatusCard
+          v-for="model in modelHealth"
+          :key="model.name"
+          :name="model.name"
+          :success-rate="model.successRate"
+          :latency="model.latency"
+          :status="model.status"
+        />
+      </div>
+    </section>
+
+    <section class="home-shell section-block">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">Dashboard Preview</span>
+          <h2>平台运营视图</h2>
+        </div>
+        <p>以统一入口查看模型接入、路由策略、请求趋势和使用分布。</p>
+      </div>
+
+      <div class="metrics-grid">
+        <MetricCard
+          v-for="metric in platformMetrics"
+          :key="metric.label"
+          :label="metric.label"
+          :value="metric.value"
+          :trend="metric.trend"
+          :trend-tone="metric.trendTone"
+        />
+      </div>
+
+      <div class="dashboard-grid">
+        <AppPanel>
+          <div class="panel-title-row">
+            <h3>路由策略</h3>
+            <span>按业务目标自动选择模型</span>
+          </div>
+          <div class="strategy-list">
+            <div v-for="strategy in routingStrategies" :key="strategy.name" class="strategy-row">
+              <div>
+                <strong>{{ strategy.name }}</strong>
+                <p>{{ strategy.desc }}</p>
+              </div>
+              <span>{{ strategy.scene }}</span>
             </div>
-            <a-tag :color="m.statusColor" class="model-status">{{ m.status }}</a-tag>
           </div>
-        </div>
-      </div>
-    </section>
+        </AppPanel>
 
-    <!-- CTA -->
-    <section v-if="!loginUserStore.loginUser.id" class="cta-section">
-      <div class="container">
-        <div class="cta-card">
-          <h2 class="cta-title">立即开始，免费使用</h2>
-          <p class="cta-desc">注册即可获得免费调用配额，无需信用卡</p>
-          <RouterLink to="/user/register" class="btn-cta">免费注册 →</RouterLink>
-        </div>
+        <AppPanel>
+          <div class="panel-title-row">
+            <h3>请求趋势</h3>
+            <span>近 7 日展示</span>
+          </div>
+          <div class="trend-bars" aria-label="请求趋势图">
+            <div v-for="point in requestTrend" :key="point.day" class="trend-item">
+              <div class="trend-track">
+                <span class="trend-fill" :style="{ height: `${point.value}%` }"></span>
+              </div>
+              <span>{{ point.day }}</span>
+            </div>
+          </div>
+        </AppPanel>
+
+        <AppPanel>
+          <div class="panel-title-row">
+            <h3>模型使用占比</h3>
+            <span>产品展示</span>
+          </div>
+          <div class="usage-panel">
+            <div class="donut" aria-hidden="true"></div>
+            <div class="usage-list">
+              <div v-for="item in usageShare" :key="item.name" class="usage-row">
+                <span>
+                  <i :style="{ background: item.color }"></i>
+                  {{ item.name }}
+                </span>
+                <strong>{{ item.value }}%</strong>
+              </div>
+            </div>
+          </div>
+        </AppPanel>
+
+        <AppPanel>
+          <div class="panel-title-row">
+            <h3>最新动态</h3>
+            <span>平台活动</span>
+          </div>
+          <div class="activity-list">
+            <div v-for="item in latestUpdates" :key="item.title" class="activity-row">
+              <span class="activity-dot"></span>
+              <div>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.desc }}</p>
+              </div>
+            </div>
+          </div>
+        </AppPanel>
       </div>
     </section>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
-import {
-  DashboardOutlined,
-  ThunderboltOutlined,
-  SafetyOutlined,
-  ApiOutlined,
-  BarChartOutlined,
-  CheckCircleFilled,
-  SwapOutlined,
-} from '@ant-design/icons-vue'
+import { computed } from 'vue'
+import { ArrowRightOutlined, DashboardOutlined } from '@ant-design/icons-vue'
+import AppPanel from '@/components/ui/AppPanel.vue'
+import MetricCard from '@/components/ui/MetricCard.vue'
+import ModelStatusCard from '@/components/ui/ModelStatusCard.vue'
 import { useLoginUserStore } from '@/stores/loginUser'
 
 const loginUserStore = useLoginUserStore()
+const isLoggedIn = computed(() => Boolean(loginUserStore.loginUser.id))
 
-const stats = [
-  { value: '9+', label: '接入模型数' },
-  { value: '3种', label: '路由策略' },
-  { value: '99.9%', label: '可用性 SLA' },
-  { value: '< 50ms', label: '平均路由延迟' },
+const sdkCode = [
+  'from openai import OpenAI',
+  '',
+  'client = OpenAI(',
+  '    api_key="sk-your-leo-api-key",',
+  '    base_url="https://api.leoai.cn/v1"',
+  ')',
+  '',
+  'response = client.chat.completions.create(',
+  '    model="auto",',
+  '    messages=[{"role": "user", "content": "Hello"}]',
+  ')',
 ]
 
-const features = [
-  {
-    icon: SwapOutlined,
-    iconBg: '#eff6ff',
-    iconColor: '#2563eb',
-    title: '智能模型路由',
-    desc: '多维度路由策略，自动选择最优模型',
-    points: ['成本优先 / 延迟优先 / 轮询', '自动 Fallback 容灾切换', '固定模型 / 综合评分路由'],
-  },
-  {
-    icon: ApiOutlined,
-    iconBg: '#f5f3ff',
-    iconColor: '#7c3aed',
-    title: 'OpenAI 协议兼容',
-    desc: '无需修改代码，一键切换',
-    points: ['完全兼容 OpenAI SDK', '支持流式输出 SSE', '支持深度思考模型'],
-  },
-  {
-    icon: SafetyOutlined,
-    iconBg: '#ecfdf5',
-    iconColor: '#059669',
-    title: '高可用与安全',
-    desc: '企业级稳定性保障',
-    points: ['健康检查 + 自动摘除', 'API Key 管理与鉴权', 'IP 黑名单 + 限流保护'],
-  },
-  {
-    icon: BarChartOutlined,
-    iconBg: '#fff7ed',
-    iconColor: '#ea580c',
-    title: '全链路可观测',
-    desc: '每一次调用都可追踪',
-    points: ['Token 消耗实时统计', '请求日志与链路追踪', '模型成本分析报表'],
-  },
+const modelHealth = [
+  { name: 'DeepSeek', successRate: '98.5%', latency: '812ms', status: '健康' },
+  { name: '通义千问', successRate: '97.6%', latency: '623ms', status: '健康' },
+  { name: '智谱 GLM', successRate: '99.1%', latency: '742ms', status: '健康' },
+  { name: 'OpenAI', successRate: '98.9%', latency: '721ms', status: '健康' },
+  { name: 'Gemini', successRate: '97.2%', latency: '856ms', status: '健康' },
 ]
 
-const models = [
-  {
-    abbr: 'DS',
-    name: 'DeepSeek',
-    desc: 'deepseek-chat · deepseek-reasoner',
-    bg: 'linear-gradient(135deg,#e0f2fe,#bae6fd)',
-    status: '已接入',
-    statusColor: 'green',
-  },
-  {
-    abbr: 'QW',
-    name: '通义千问',
-    desc: 'qwen-plus · qwen-max · qwen-turbo',
-    bg: 'linear-gradient(135deg,#fef3c7,#fde68a)',
-    status: '已接入',
-    statusColor: 'green',
-  },
-  {
-    abbr: 'ZP',
-    name: '智谱 AI',
-    desc: 'glm-4.7 · glm-4.7-flash',
-    bg: 'linear-gradient(135deg,#f0fdf4,#bbf7d0)',
-    status: '已接入',
-    statusColor: 'green',
-  },
-  {
-    abbr: 'GPT',
-    name: 'OpenAI',
-    desc: 'gpt-4o · gpt-4-turbo',
-    bg: 'linear-gradient(135deg,#f5f3ff,#ddd6fe)',
-    status: '计划中',
-    statusColor: 'orange',
-  },
+const platformMetrics: Array<{
+  label: string
+  value: string
+  trend: string
+  trendTone: 'success' | 'danger' | 'muted'
+}> = [
+  { label: '接入模型', value: '12', trend: '覆盖文本与图像', trendTone: 'muted' },
+  { label: '路由策略', value: '5', trend: '支持自动 Fallback', trendTone: 'success' },
+  { label: '今日请求', value: '128K', trend: '产品展示数据', trendTone: 'muted' },
+  { label: '成功率', value: '98.7%', trend: '+0.6%', trendTone: 'success' },
+  { label: '平均延迟', value: '751ms', trend: '-42ms', trendTone: 'success' },
+  { label: '用户数', value: '3,240', trend: '团队与开发者', trendTone: 'muted' },
+]
+
+const routingStrategies = [
+  { name: '智能综合路由', desc: '结合可用性、延迟与成功率进行综合评分。', scene: '默认推荐' },
+  { name: '成本优先', desc: '优先选择单位调用成本更低的模型供应商。', scene: '批量任务' },
+  { name: '延迟优先', desc: '优先使用近期响应速度更快的模型通道。', scene: '交互场景' },
+  { name: '固定模型', desc: '为指定业务稳定绑定模型与供应商。', scene: '强一致输出' },
+]
+
+const requestTrend = [
+  { day: 'Mon', value: 42 },
+  { day: 'Tue', value: 56 },
+  { day: 'Wed', value: 48 },
+  { day: 'Thu', value: 74 },
+  { day: 'Fri', value: 68 },
+  { day: 'Sat', value: 52 },
+  { day: 'Sun', value: 82 },
+]
+
+const usageShare = [
+  { name: 'DeepSeek', value: 34, color: '#245bff' },
+  { name: '通义千问', value: 24, color: '#12b76a' },
+  { name: 'OpenAI', value: 18, color: '#f79009' },
+  { name: 'Gemini', value: 14, color: '#7c3aed' },
+  { name: '其他模型', value: 10, color: '#98a2b3' },
+]
+
+const latestUpdates = [
+  { title: '新增 Gemini 图像模型入口', desc: '统一在模型广场展示会员可用能力。' },
+  { title: '路由策略支持健康权重', desc: '异常通道可自动降权并触发 Fallback。' },
+  { title: '控制台指标视图优化', desc: '请求、成本和延迟指标聚合展示。' },
 ]
 </script>
 
 <style scoped>
 .home-page {
-  min-height: calc(100vh - 56px);
-  background: #fafafa;
+  min-height: calc(100vh - var(--leo-header-height));
+  background: var(--leo-bg-page);
 }
 
-.container {
-  max-width: 1100px;
+.home-shell {
+  width: min(100%, 1180px);
   margin: 0 auto;
   padding: 0 24px;
 }
 
-/* Hero */
-.hero {
-  text-align: center;
-  padding: 80px 24px 64px;
-  background: linear-gradient(180deg, #f8faff 0%, #fafafa 100%);
-  border-bottom: 1px solid #e5e7eb;
+.hero-section {
+  padding: 56px 0 32px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0) 76%),
+    var(--leo-bg-page);
+  border-bottom: 1px solid var(--leo-border);
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.9fr);
+  gap: 40px;
+  align-items: center;
+}
+
+.hero-copy {
+  min-width: 0;
 }
 
 .hero-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
-  padding: 5px 14px;
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 500;
-  margin-bottom: 28px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  padding: 6px 10px;
+  color: var(--leo-primary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+  background: var(--leo-primary-soft);
+  border: 1px solid #d7e2ff;
+  border-radius: var(--leo-radius-md);
 }
 
-.badge-dot {
+.hero-badge__dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
-  flex-shrink: 0;
+  background: var(--leo-success);
+  border-radius: 999px;
 }
 
 .hero-title {
-  font-size: 52px;
+  max-width: 680px;
+  margin: 18px 0 0;
+  color: var(--leo-text-primary);
+  font-size: 48px;
   font-weight: 800;
-  line-height: 1.15;
-  color: #111827;
-  margin: 0 0 20px;
-  letter-spacing: -1.5px;
+  line-height: 1.12;
+  letter-spacing: 0;
 }
 
-.hero-gradient {
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.hero-subtitle {
+.hero-desc {
+  max-width: 620px;
+  margin: 20px 0 0;
+  color: var(--leo-text-secondary);
   font-size: 17px;
-  color: #6b7280;
-  line-height: 1.8;
-  margin: 0 0 36px;
+  line-height: 1.75;
+}
+
+.hero-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.hero-points span {
+  padding: 6px 10px;
+  color: var(--leo-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  background: #ffffff;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
 }
 
 .hero-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.action {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin-bottom: 52px;
-}
-
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 44px;
-  padding: 0 24px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
+  gap: 8px;
+  min-width: 116px;
+  height: 42px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
   text-decoration: none;
-  transition: opacity 0.15s;
-  border: none;
+  border-radius: var(--leo-radius-md);
+  transition:
+    border-color 0.16s,
+    background 0.16s,
+    color 0.16s;
 }
 
-.btn-primary:hover {
-  opacity: 0.88;
+.action--primary {
+  color: #ffffff;
+  background: var(--leo-primary);
+  border: 1px solid var(--leo-primary);
 }
 
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  height: 44px;
-  padding: 0 24px;
-  border-radius: 10px;
-  background: #fff;
-  color: #374151;
-  font-size: 15px;
-  font-weight: 500;
-  text-decoration: none;
-  border: 1px solid #e5e7eb;
-  transition: all 0.15s;
+.action--primary:hover {
+  color: #ffffff;
+  background: var(--leo-primary-hover);
+  border-color: var(--leo-primary-hover);
 }
 
-.btn-secondary:hover {
-  border-color: #d1d5db;
-  background: #f9fafb;
+.action--secondary {
+  color: var(--leo-text-primary);
+  background: #ffffff;
+  border: 1px solid var(--leo-border-strong);
 }
 
-/* Code block */
-.hero-code {
-  max-width: 600px;
-  margin: 0 auto;
-  background: #1e1e2e;
-  border-radius: 12px;
+.action--secondary:hover {
+  color: var(--leo-primary);
+  border-color: var(--leo-primary);
+}
+
+.code-panel {
+  min-width: 0;
   overflow: hidden;
-  text-align: left;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-  border: 1px solid #2d2d3d;
+  background: #0f172a;
+  border: 1px solid #22304a;
+  border-radius: var(--leo-radius-md);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.14);
 }
 
-.code-header {
+.code-panel__top {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: #16161f;
-  border-bottom: 1px solid #2d2d3d;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: #111c33;
+  border-bottom: 1px solid #22304a;
 }
 
-.code-dots {
+.code-tabs {
   display: flex;
   gap: 6px;
-}
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-.dot.red {
-  background: #ff5f57;
-}
-.dot.yellow {
-  background: #febc2e;
-}
-.dot.green {
-  background: #28c840;
+  min-width: 0;
 }
 
-.code-title {
+.code-tab,
+.code-label {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 9px;
   font-size: 12px;
-  color: #6b7280;
-  font-weight: 500;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+  border-radius: var(--leo-radius-sm);
 }
 
-.code-body {
+.code-tab {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.code-tab--active {
+  color: #ffffff;
+  background: var(--leo-primary);
+}
+
+.code-label {
+  flex: 0 0 auto;
+  color: #93c5fd;
+  background: rgba(36, 91, 255, 0.14);
+}
+
+.code-block {
+  min-height: 276px;
   margin: 0;
-  padding: 20px 20px 24px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  padding: 18px;
+  overflow-x: auto;
+  color: #dbeafe;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 13px;
   line-height: 1.7;
-  color: #cdd6f4;
-  overflow-x: auto;
 }
 
-.c-keyword {
-  color: #cba6f7;
-}
-.c-str {
-  color: #a6e3a1;
-}
-.c-comment {
-  color: #6c7086;
-}
-
-/* Stats */
-.stats-section {
-  padding: 40px 0;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1px;
-  background: #e5e7eb;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.stat-item {
-  padding: 28px 24px;
-  text-align: center;
-  background: #fff;
-}
-
-.stat-value {
-  font-size: 32px;
-  font-weight: 800;
-  color: #111827;
-  letter-spacing: -1px;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #9ca3af;
-  font-weight: 500;
-}
-
-/* Features */
-.features-section {
-  padding: 80px 0;
-  background: #fafafa;
-}
-
-.section-header {
-  text-align: center;
-  margin-bottom: 48px;
-}
-
-.section-label {
-  display: inline-block;
+.code-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  color: #94a3b8;
   font-size: 12px;
-  font-weight: 600;
-  color: #2563eb;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 20px;
-  padding: 3px 12px;
+  line-height: 18px;
+  background: #111c33;
+  border-top: 1px solid #22304a;
+}
+
+.code-footer strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-block {
+  padding-top: 36px;
+}
+
+.section-block:last-child {
+  padding-bottom: 56px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
   margin-bottom: 16px;
-  letter-spacing: 0.5px;
+}
+
+.section-kicker {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--leo-primary);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 16px;
   text-transform: uppercase;
 }
 
-.section-title {
-  font-size: 32px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0 0 12px;
-  letter-spacing: -0.5px;
-}
-
-.section-desc {
-  font-size: 15px;
-  color: #6b7280;
+.section-heading h2 {
   margin: 0;
+  color: var(--leo-text-primary);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 32px;
 }
 
-.features-grid {
+.section-heading p {
+  max-width: 430px;
+  margin: 0;
+  color: var(--leo-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: right;
+}
+
+.model-health-grid,
+.metrics-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.feature-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 28px;
-  transition: all 0.2s;
+.metrics-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-bottom: 12px;
 }
 
-.feature-card:hover {
-  border-color: #bfdbfe;
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.06);
-  transform: translateY(-2px);
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.feature-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+.panel-title-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
-.feature-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0 0 8px;
-}
-
-.feature-desc {
-  font-size: 13px;
-  color: #9ca3af;
-  margin: 0 0 16px;
-}
-
-.feature-list {
-  list-style: none;
-  padding: 0;
+.panel-title-row h3 {
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  color: var(--leo-text-primary);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 22px;
 }
 
-.feature-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #374151;
-}
-
-.check-icon {
-  color: #10b981;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-/* Models */
-.models-section {
-  padding: 80px 0;
-  background: #fff;
-  border-top: 1px solid #e5e7eb;
-}
-
-.models-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
-
-.model-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #fff;
-  transition: all 0.15s;
-}
-
-.model-card:hover {
-  border-color: #d1d5db;
-  background: #f9fafb;
-}
-
-.model-logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: #374151;
-  flex-shrink: 0;
-}
-
-.model-info {
-  flex: 1;
-  min-width: 0;
-}
-.model-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111827;
-}
-.model-desc {
+.panel-title-row span {
+  color: var(--leo-text-tertiary);
   font-size: 12px;
-  color: #9ca3af;
-  margin-top: 2px;
-}
-.model-status {
-  flex-shrink: 0;
-  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
-/* CTA */
-.cta-section {
-  padding: 80px 0;
-  background: #fafafa;
+.strategy-list,
+.activity-list {
+  display: grid;
+  gap: 10px;
 }
 
-.cta-card {
-  background: linear-gradient(135deg, #1e3a8a 0%, #4c1d95 100%);
-  border-radius: 20px;
-  padding: 64px 48px;
+.strategy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--leo-border);
+}
+
+.strategy-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.strategy-row strong,
+.activity-row strong {
+  color: var(--leo-text-primary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.strategy-row p,
+.activity-row p {
+  margin: 3px 0 0;
+  color: var(--leo-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.strategy-row > span {
+  padding: 4px 8px;
+  color: var(--leo-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  background: var(--leo-primary-soft);
+  border-radius: var(--leo-radius-sm);
+}
+
+.trend-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  height: 202px;
+  align-items: end;
+}
+
+.trend-item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--leo-text-tertiary);
+  font-size: 12px;
+  line-height: 16px;
   text-align: center;
 }
 
-.cta-title {
-  font-size: 34px;
-  font-weight: 800;
-  color: #fff;
-  margin: 0 0 12px;
-  letter-spacing: -0.5px;
+.trend-track {
+  position: relative;
+  height: 164px;
+  overflow: hidden;
+  background: var(--leo-bg-muted);
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-sm);
 }
 
-.cta-desc {
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.75);
-  margin: 0 0 32px;
+.trend-fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(180deg, #5b8cff 0%, var(--leo-primary) 100%);
+  border-radius: var(--leo-radius-sm) var(--leo-radius-sm) 0 0;
 }
 
-.btn-cta {
-  display: inline-block;
-  height: 46px;
-  line-height: 46px;
-  padding: 0 28px;
-  border-radius: 10px;
-  background: #fff;
-  color: #2563eb;
-  font-size: 15px;
-  font-weight: 700;
-  text-decoration: none;
-  transition: opacity 0.15s;
+.usage-panel {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
 }
 
-.btn-cta:hover {
-  opacity: 0.92;
+.donut {
+  width: 150px;
+  aspect-ratio: 1;
+  background: conic-gradient(
+    #245bff 0 34%,
+    #12b76a 34% 58%,
+    #f79009 58% 76%,
+    #7c3aed 76% 90%,
+    #98a2b3 90% 100%
+  );
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 34px #ffffff;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+.usage-list {
+  display: grid;
+  gap: 10px;
+}
+
+.usage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--leo-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.usage-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.usage-row i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.usage-row strong {
+  color: var(--leo-text-primary);
+  font-size: 13px;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  background: var(--leo-success);
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px rgba(18, 183, 106, 0.12);
+}
+
+@media (max-width: 1024px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-health-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .home-shell {
+    padding: 0 16px;
+  }
+
+  .hero-section {
+    padding-top: 32px;
+  }
+
   .hero-title {
     font-size: 34px;
+    line-height: 1.18;
   }
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+
+  .hero-desc {
+    font-size: 15px;
   }
-  .features-grid {
+
+  .code-panel__top,
+  .code-footer,
+  .section-heading,
+  .panel-title-row,
+  .usage-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .code-panel__top,
+  .code-footer {
+    display: grid;
+  }
+
+  .code-tabs {
+    overflow-x: auto;
+  }
+
+  .section-heading {
+    display: grid;
+  }
+
+  .section-heading p {
+    max-width: none;
+    text-align: left;
+  }
+
+  .model-health-grid,
+  .metrics-grid,
+  .dashboard-grid {
     grid-template-columns: 1fr;
   }
-  .models-grid {
+
+  .usage-panel {
     grid-template-columns: 1fr;
+  }
+
+  .donut {
+    width: 132px;
+    justify-self: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .action {
+    width: 100%;
+  }
+
+  .code-block {
+    min-height: 250px;
+    padding: 14px;
+    font-size: 12px;
+  }
+
+  .strategy-row {
+    grid-template-columns: 1fr;
+    align-items: start;
   }
 }
 </style>
