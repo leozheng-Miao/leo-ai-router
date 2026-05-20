@@ -13,15 +13,21 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ApiOutlined, BarChartOutlined, CreditCardOutlined, UserOutlined } from '@ant-design/icons-vue'
 import SidebarNav from '@/components/ui/SidebarNav.vue'
+import { useLoginUserStore } from '@/stores/loginUser'
 
-const items = [
-  { label: '个人中心', path: '/profile', icon: UserOutlined },
-  { label: 'API Keys', path: '/keys', icon: ApiOutlined },
+const loginUserStore = useLoginUserStore()
+
+const allItems = [
+  { label: '个人中心', path: '/profile', icon: UserOutlined, auth: true },
+  { label: 'API Keys', path: '/keys', icon: ApiOutlined, auth: true },
   { label: '会员充值', path: '/membership', icon: CreditCardOutlined },
-  { label: '使用统计', path: '/history', icon: BarChartOutlined },
+  { label: '使用统计', path: '/history', icon: BarChartOutlined, auth: true },
 ]
+
+const items = computed(() => allItems.filter((item) => !item.auth || loginUserStore.loginUser.id))
 </script>
 
 <style scoped>
