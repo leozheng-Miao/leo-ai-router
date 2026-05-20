@@ -183,13 +183,13 @@ onBeforeUnmount(() => {
 .axis-line { stroke: var(--leo-border-strong); }
 .axis-text { fill: var(--leo-text-secondary); font-size: 12px; }
 .axis-text--bottom { fill: var(--leo-text-tertiary); }
-.bar-rect { fill: rgba(36, 91, 255, 0.14); }
+.bar-rect { fill: color-mix(in srgb, var(--leo-primary) 14%, transparent); }
 .line-token { fill: none; stroke: var(--leo-primary); stroke-width: 3; }
 .line-cost { fill: none; stroke: var(--leo-warning); stroke-width: 3; }
 .dot-token { fill: var(--leo-primary); }
 .dot-cost { fill: var(--leo-warning); }
 .hover-zone { fill: transparent; }
-.tooltip { position: absolute; pointer-events: none; z-index: 2; min-width: 156px; border-radius: var(--leo-radius-md); padding: 12px 14px; background: rgba(15, 23, 42, 0.94); color: #e2e8f0; box-shadow: var(--leo-shadow-pop); }
+.tooltip { position: absolute; pointer-events: none; z-index: 2; min-width: 156px; border-radius: var(--leo-radius-md); padding: 12px 14px; background: color-mix(in srgb, var(--leo-text-primary) 94%, transparent); color: var(--leo-bg-panel); box-shadow: var(--leo-shadow-pop); }
 .tooltip-title { font-weight: 700; margin-bottom: 8px; }
 .tooltip-row { font-size: 12px; line-height: 1.7; }
 </style>
