@@ -1,136 +1,139 @@
 <template>
-  <div class="membership-page">
-    <section class="account-overview">
-      <div>
-        <div class="eyebrow">Billing console</div>
-        <h1>会员与积分</h1>
-        <p>聊天额度由套餐管理，图片生成使用积分扣费。</p>
-      </div>
-      <div class="overview-grid">
-        <div class="overview-item">
-          <span>当前套餐</span>
-          <strong>{{ membership.planName || '免费版' }}</strong>
+  <UserCenterLayout>
+    <div class="membership-console">
+      <section class="account-overview">
+        <div>
+          <div class="eyebrow">Billing console</div>
+          <h1>会员与积分</h1>
+          <p>套餐负责聊天和 API 中转权益，积分负责图片生成消耗。</p>
         </div>
-        <div class="overview-item">
-          <span>普通剩余</span>
-          <strong>{{ formatLimit(membership.dailyProRemaining) }}</strong>
+        <div class="overview-grid">
+          <div class="overview-item">
+            <span>当前套餐</span>
+            <strong>{{ membership.planName || '免费版' }}</strong>
+          </div>
+          <div class="overview-item">
+            <span>普通剩余</span>
+            <strong>{{ formatLimit(membership.dailyProRemaining) }}</strong>
+          </div>
+          <div class="overview-item">
+            <span>高级剩余</span>
+            <strong>{{ formatLimit(membership.dailyAdvancedRemaining) }}</strong>
+          </div>
+          <div class="overview-item">
+            <span>积分余额</span>
+            <strong>{{ formatNumber(membership.pointBalance) }}</strong>
+          </div>
         </div>
-        <div class="overview-item">
-          <span>高级剩余</span>
-          <strong>{{ formatLimit(membership.dailyAdvancedRemaining) }}</strong>
-        </div>
-        <div class="overview-item">
-          <span>积分余额</span>
-          <strong>{{ formatNumber(membership.pointBalance) }}</strong>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="billing-layout">
-      <main class="catalog-panel">
-        <div class="catalog-head">
-          <a-segmented v-model:value="activeTab" :options="tabOptions" />
-          <span class="catalog-note">
-            {{ activeTab === 'plans' ? '套餐用于聊天和 API 中转额度' : '积分用于图片生成，永久有效' }}
-          </span>
-        </div>
+      <section class="billing-layout">
+        <main class="catalog-panel">
+          <div class="catalog-head">
+            <a-segmented v-model:value="activeTab" :options="tabOptions" />
+            <span class="catalog-note">
+              {{ activeTab === 'plans' ? '套餐用于聊天和 API 中转额度' : '积分用于图片生成，永久有效' }}
+            </span>
+          </div>
 
-        <div v-if="activeTab === 'plans'" class="plan-table">
-          <button
-            v-for="plan in plans"
-            :key="plan.planCode"
-            type="button"
-            class="plan-row"
-            :class="{ selected: selectedPlan?.planCode === plan.planCode }"
-            @click="selectedPlan = plan"
-          >
-            <div class="plan-main">
-              <div class="plan-title">
-                <CrownOutlined />
-                <strong>{{ plan.planName }}</strong>
-                <a-tag v-if="plan.lifetime === 1" color="blue">长期</a-tag>
+          <div v-if="activeTab === 'plans'" class="plan-table">
+            <button
+              v-for="plan in plans"
+              :key="plan.planCode"
+              type="button"
+              class="plan-row"
+              :class="{ selected: selectedPlan?.planCode === plan.planCode }"
+              @click="selectedPlan = plan"
+            >
+              <div class="plan-main">
+                <div class="plan-title">
+                  <CrownOutlined />
+                  <strong>{{ plan.planName }}</strong>
+                  <a-tag v-if="plan.lifetime === 1" color="blue">长期</a-tag>
+                </div>
+                <p>{{ plan.description || '适合持续使用多模型聊天的账号' }}</p>
               </div>
-              <p>{{ plan.description || '适合持续使用多模型聊天的账号' }}</p>
-            </div>
-            <div class="plan-metrics">
-              <div><span>普通/日</span><strong>{{ formatLimit(plan.dailyProLimit) }}</strong></div>
-              <div><span>高级/日</span><strong>{{ formatLimit(plan.dailyAdvancedLimit) }}</strong></div>
-              <div><span>赠送积分</span><strong>{{ formatNumber(plan.bonusPoints) }}</strong></div>
-            </div>
-            <div class="plan-price">
-              <strong>¥{{ formatMoney(plan.price) }}</strong>
-              <span>{{ plan.lifetime === 1 ? '永久' : `${plan.durationDays || 0} 天` }}</span>
-            </div>
-          </button>
-        </div>
+              <div class="plan-metrics">
+                <div><span>普通/日</span><strong>{{ formatLimit(plan.dailyProLimit) }}</strong></div>
+                <div><span>高级/日</span><strong>{{ formatLimit(plan.dailyAdvancedLimit) }}</strong></div>
+                <div><span>赠送积分</span><strong>{{ formatNumber(plan.bonusPoints) }}</strong></div>
+              </div>
+              <div class="plan-price">
+                <strong>¥{{ formatMoney(plan.price) }}</strong>
+                <span>{{ plan.lifetime === 1 ? '永久' : `${plan.durationDays || 0} 天` }}</span>
+              </div>
+            </button>
+          </div>
 
-        <div v-else class="point-grid">
-          <button
-            v-for="pkg in pointPackages"
-            :key="pkg.packageCode"
-            type="button"
-            class="point-card"
-            :class="{ selected: selectedPackage?.packageCode === pkg.packageCode }"
-            @click="selectedPackage = pkg"
+          <div v-else class="point-grid">
+            <button
+              v-for="pkg in pointPackages"
+              :key="pkg.packageCode"
+              type="button"
+              class="point-card"
+              :class="{ selected: selectedPackage?.packageCode === pkg.packageCode }"
+              @click="selectedPackage = pkg"
+            >
+              <div class="point-head">
+                <WalletOutlined />
+                <a-tag v-if="pkg.badge" color="blue">{{ pkg.badge }}</a-tag>
+              </div>
+              <strong>{{ formatNumber(pkg.points) }}</strong>
+              <span>积分</span>
+              <div class="point-price">¥{{ formatMoney(pkg.price) }}</div>
+              <p>¥{{ pointUnitPrice(pkg) }}/积分</p>
+            </button>
+          </div>
+        </main>
+
+        <aside class="summary-panel">
+          <div class="summary-title">支付摘要</div>
+          <div class="summary-product">
+            <span>{{ activeTab === 'plans' ? '订阅套餐' : '积分包' }}</span>
+            <strong>{{ currentName }}</strong>
+          </div>
+          <div class="summary-lines">
+            <div>
+              <span>商品金额</span>
+              <strong>¥{{ formatMoney(currentPrice) }}</strong>
+            </div>
+            <div>
+              <span>支付方式</span>
+              <strong>{{ paymentMethodText[paymentMethod] }}</strong>
+            </div>
+          </div>
+          <a-radio-group v-model:value="paymentMethod" class="pay-methods">
+            <a-radio-button value="alipay">支付宝</a-radio-button>
+            <a-radio-button value="stripe">Stripe</a-radio-button>
+            <a-tooltip title="微信支付暂未开放">
+              <a-radio-button value="wechat" disabled>微信</a-radio-button>
+            </a-tooltip>
+          </a-radio-group>
+          <a-button
+            type="primary"
+            block
+            size="large"
+            class="pay-button"
+            :loading="Boolean(submitting)"
+            @click="submitOrder"
           >
-            <div class="point-head">
-              <WalletOutlined />
-              <a-tag v-if="pkg.badge" color="blue">{{ pkg.badge }}</a-tag>
-            </div>
-            <strong>{{ formatNumber(pkg.points) }}</strong>
-            <span>积分</span>
-            <div class="point-price">¥{{ formatMoney(pkg.price) }}</div>
-            <p>¥{{ pointUnitPrice(pkg) }}/积分</p>
-          </button>
-        </div>
-      </main>
-
-      <aside class="summary-panel">
-        <div class="summary-title">支付摘要</div>
-        <div class="summary-product">
-          <span>{{ activeTab === 'plans' ? '订阅套餐' : '积分包' }}</span>
-          <strong>{{ currentName }}</strong>
-        </div>
-        <div class="summary-lines">
-          <div>
-            <span>商品金额</span>
-            <strong>¥{{ formatMoney(currentPrice) }}</strong>
+            立即支付 ¥{{ formatMoney(currentPrice) }}
+          </a-button>
+          <div class="summary-footer">
+            <CheckCircleOutlined />
+            支付成功后权益实时到账，可在个人中心账单查看记录。
           </div>
-          <div>
-            <span>支付方式</span>
-            <strong>{{ paymentMethodText[paymentMethod] }}</strong>
-          </div>
-        </div>
-        <a-radio-group v-model:value="paymentMethod" class="pay-methods">
-          <a-radio-button value="alipay">支付宝</a-radio-button>
-          <a-radio-button value="stripe">Stripe</a-radio-button>
-          <a-tooltip title="微信支付暂未开放">
-            <a-radio-button value="wechat" disabled>微信</a-radio-button>
-          </a-tooltip>
-        </a-radio-group>
-        <a-button
-          type="primary"
-          block
-          size="large"
-          class="pay-button"
-          :loading="Boolean(submitting)"
-          @click="submitOrder"
-        >
-          立即支付 ¥{{ formatMoney(currentPrice) }}
-        </a-button>
-        <div class="summary-footer">
-          <CheckCircleOutlined />
-          支付成功后权益实时到账，可在个人中心账单查看记录。
-        </div>
-      </aside>
-    </section>
-  </div>
+        </aside>
+      </section>
+    </div>
+  </UserCenterLayout>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { CheckCircleOutlined, CrownOutlined, WalletOutlined } from '@ant-design/icons-vue'
+import UserCenterLayout from '@/layouts/UserCenterLayout.vue'
 import {
   getMyMembership,
   listMembershipPlans,
@@ -265,27 +268,23 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.membership-page {
-  min-height: calc(100vh - 56px);
-  padding: 28px 32px 44px;
-  background: #f5f7fb;
-  color: #0f172a;
+.membership-console {
+  min-height: calc(100vh - var(--leo-header-height) - 50px);
+  color: var(--leo-text-primary);
 }
 
 .account-overview {
-  max-width: 1280px;
-  margin: 0 auto 18px;
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(520px, 1.4fr);
   gap: 20px;
   align-items: end;
+  margin-bottom: 18px;
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--leo-primary);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -297,7 +296,7 @@ h1 {
 
 p {
   margin: 0;
-  color: #64748b;
+  color: var(--leo-text-secondary);
 }
 
 .overview-grid {
@@ -307,15 +306,15 @@ p {
 }
 
 .overview-item {
-  border: 1px solid #dbe4f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
   padding: 12px 14px;
 }
 
 .overview-item span {
   display: block;
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
 }
 
@@ -326,8 +325,6 @@ p {
 }
 
 .billing-layout {
-  max-width: 1280px;
-  margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 18px;
@@ -336,9 +333,9 @@ p {
 
 .catalog-panel,
 .summary-panel {
-  border: 1px solid #dbe4f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
 }
 
 .catalog-panel {
@@ -355,7 +352,7 @@ p {
 }
 
 .catalog-note {
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 13px;
 }
 
@@ -367,9 +364,9 @@ p {
 
 .plan-row {
   width: 100%;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
   padding: 16px;
   display: grid;
   grid-template-columns: minmax(220px, 1.3fr) minmax(320px, 1.5fr) 128px;
@@ -383,20 +380,20 @@ p {
 .plan-row.selected,
 .point-card:hover,
 .point-card.selected {
-  border-color: #2563eb;
-  background: #f8fbff;
-  box-shadow: 0 8px 26px rgba(37, 99, 235, 0.08);
+  border-color: var(--leo-primary);
+  background: var(--leo-bg-active);
+  box-shadow: 0 8px 26px rgba(36, 91, 255, 0.08);
 }
 
 .plan-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #0f172a;
+  color: var(--leo-text-primary);
 }
 
 .plan-title :deep(svg) {
-  color: #2563eb;
+  color: var(--leo-primary);
 }
 
 .plan-main p {
@@ -412,15 +409,15 @@ p {
 }
 
 .plan-metrics div {
-  border-radius: 8px;
-  background: #f8fafc;
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-muted);
   padding: 10px;
 }
 
 .plan-metrics span,
 .plan-price span {
   display: block;
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
 }
 
@@ -428,7 +425,7 @@ p {
 .plan-price strong {
   display: block;
   margin-top: 5px;
-  color: #0f172a;
+  color: var(--leo-text-primary);
 }
 
 .plan-price {
@@ -436,7 +433,7 @@ p {
 }
 
 .plan-price strong {
-  color: #2563eb;
+  color: var(--leo-primary);
   font-size: 24px;
 }
 
@@ -448,9 +445,9 @@ p {
 
 .point-card {
   min-height: 188px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
   padding: 16px;
   text-align: left;
   cursor: pointer;
@@ -462,25 +459,25 @@ p {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  color: #2563eb;
+  color: var(--leo-primary);
 }
 
 .point-card > strong {
   display: block;
   margin-top: 18px;
   font-size: 30px;
-  color: #0f172a;
+  color: var(--leo-text-primary);
 }
 
 .point-card > span,
 .point-card p {
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 13px;
 }
 
 .point-price {
   margin-top: 18px;
-  color: #2563eb;
+  color: var(--leo-primary);
   font-size: 22px;
   font-weight: 800;
 }
@@ -497,15 +494,15 @@ p {
 }
 
 .summary-product {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-muted);
   padding: 14px;
 }
 
 .summary-product span,
 .summary-lines span {
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
 }
 
@@ -540,7 +537,7 @@ p {
 }
 
 .pay-button {
-  border-radius: 8px;
+  border-radius: var(--leo-radius-md);
   font-weight: 700;
 }
 
@@ -549,14 +546,14 @@ p {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
   line-height: 1.6;
 }
 
 .summary-footer :deep(svg) {
   margin-top: 3px;
-  color: #059669;
+  color: var(--leo-success);
 }
 
 @media (max-width: 1100px) {
@@ -579,10 +576,6 @@ p {
 }
 
 @media (max-width: 720px) {
-  .membership-page {
-    padding: 20px 14px 32px;
-  }
-
   .overview-grid,
   .point-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
