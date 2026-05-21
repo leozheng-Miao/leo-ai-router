@@ -597,7 +597,7 @@ const isBusinessResponse = (value: unknown): value is BusinessResponse => {
 }
 
 const redirectToLogin = () => {
-  const redirect = encodeURIComponent(window.location.href)
+  const redirect = encodeURIComponent(`${window.location.pathname}${window.location.search}`)
   window.location.href = `/user/login?redirect=${redirect}`
 }
 
