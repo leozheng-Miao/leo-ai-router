@@ -41,7 +41,7 @@
             </div>
             <span class="code-label">OpenAI Compatible</span>
           </div>
-          <pre class="code-block"><code><span v-for="line in sdkCode" :key="line">{{ line }}
+          <pre class="code-block"><code><span v-for="(line, index) in sdkCode" :key="`sdk-line-${index}`">{{ line }}
 </span></code></pre>
           <div class="code-footer">
             <span>base_url</span>
@@ -77,7 +77,7 @@
           <span class="section-kicker">Dashboard Preview</span>
           <h2>平台运营视图</h2>
         </div>
-        <p>以统一入口查看模型接入、路由策略、请求趋势和使用分布。</p>
+        <p>以下运营视图为产品展示数据，用于说明控制台能力，并非实时运行指标。</p>
       </div>
 
       <div class="metrics-grid">
