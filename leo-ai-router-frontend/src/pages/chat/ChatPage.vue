@@ -1568,6 +1568,7 @@ watch(selectedRoutingStrategy, (value) => {
 /* 消息列表 */
 .message-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 22px 18px 18px;
   scroll-behavior: smooth;
@@ -1943,6 +1944,7 @@ watch(selectedRoutingStrategy, (value) => {
 
 /* ── 输入区 ── */
 .input-area {
+  flex-shrink: 0;
   border-top: 1px solid var(--leo-border);
   background: var(--leo-bg-panel);
   padding: 14px 16px 16px;
@@ -2169,12 +2171,10 @@ watch(selectedRoutingStrategy, (value) => {
 @media (max-width: 1180px) {
   .chat-workspace {
     grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
     grid-template-areas:
       "rail stage"
       "route route";
-    height: auto;
-    min-height: calc(100vh - var(--leo-header-height));
-    overflow: visible;
   }
 
   .conversation-rail {
@@ -2184,7 +2184,7 @@ watch(selectedRoutingStrategy, (value) => {
 
   .chat-stage {
     grid-area: stage;
-    min-height: 640px;
+    min-height: 0;
   }
 
   .route-panel {
@@ -2198,10 +2198,14 @@ watch(selectedRoutingStrategy, (value) => {
 @media (max-width: 860px) {
   .chat-workspace {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
     grid-template-areas:
       "rail"
       "stage"
       "route";
+    height: auto;
+    min-height: calc(100vh - var(--leo-header-height));
+    overflow: visible;
     padding: 8px;
   }
 
