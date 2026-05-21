@@ -1,0 +1,93 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${LEO_DB_URL}
+    username: ${LEO_DB_USERNAME}
+    password: ${LEO_DB_PASSWORD}
+  data:
+    redis:
+      host: ${LEO_REDIS_HOST}
+      port: ${LEO_REDIS_PORT:6379}
+      database: ${LEO_REDIS_DATABASE:0}
+      password: ${LEO_REDIS_PASSWORD}
+  mail:
+    host: ${SPRING_MAIL_HOST}
+    port: ${SPRING_MAIL_PORT:465}
+    username: ${SPRING_MAIL_USERNAME}
+    password: ${SPRING_MAIL_PASSWORD}
+    protocol: ${SPRING_MAIL_PROTOCOL:smtp}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_SMTP_AUTH:true}
+          ssl:
+            enable: ${SPRING_MAIL_SMTP_SSL_ENABLE:true}
+          starttls:
+            enable: ${SPRING_MAIL_SMTP_STARTTLS_ENABLE:false}
+
+mail:
+  from: ${LEO_MAIL_FROM}
+
+knife4j:
+  enable: false
+
+auth:
+  jwt:
+    secret: ${LEO_AUTH_JWT_SECRET}
+
+encryption:
+  secret-key: ${LEO_ENCRYPTION_SECRET_KEY}
+
+app:
+  frontend-base-url: ${LEO_FRONTEND_BASE_URL}
+  cors:
+    allowed-origins: ${LEO_CORS_ALLOWED_ORIGINS}
+
+wechat:
+  oauth:
+    enabled: ${WECHAT_OAUTH_ENABLED:false}
+    app-id: ${WECHAT_OAUTH_APP_ID:}
+    app-secret: ${WECHAT_OAUTH_APP_SECRET:}
+    redirect-uri: ${WECHAT_OAUTH_REDIRECT_URI:}
+    frontend-success-url: ${WECHAT_OAUTH_FRONTEND_SUCCESS_URL:}
+    state-ttl-seconds: ${WECHAT_OAUTH_STATE_TTL_SECONDS:300}
+
+stripe:
+  api-key: ${STRIPE_API_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+  success-url: ${STRIPE_SUCCESS_URL}
+  cancel-url: ${STRIPE_CANCEL_URL}
+
+payment:
+  alipay:
+    app-id: ${ALIPAY_APP_ID:}
+    app-private-key: ${ALIPAY_APP_PRIVATE_KEY:}
+    alipay-public-key: ${ALIPAY_PUBLIC_KEY:}
+    gateway-url: ${ALIPAY_GATEWAY_URL:https://openapi.alipay.com/gateway.do}
+    notify-url: ${ALIPAY_NOTIFY_URL}
+    return-url: ${ALIPAY_RETURN_URL}
+    frontend-success-url: ${ALIPAY_FRONTEND_SUCCESS_URL}
+    frontend-cancel-url: ${ALIPAY_FRONTEND_CANCEL_URL}
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web.client.RestClient: INFO
+    org.springframework.http: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: never
+
+server:
+  forward-headers-strategy: framework
+
+plugin:
+  serpapi:
+    api-key: ${SERPAPI_API_KEY:}

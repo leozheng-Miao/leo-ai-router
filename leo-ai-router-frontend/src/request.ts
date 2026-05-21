@@ -2,8 +2,10 @@ import axios from 'axios'
 import { message } from 'ant-design-vue'
 import { clearAuthTokens, getAccessToken, getRefreshToken, saveAuthTokens } from '@/utils/authToken'
 
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8123/api'
+
 const myAxios = axios.create({
-  baseURL: 'http://localhost:8123/api',
+  baseURL: API_BASE_URL,
   timeout: 60000,
   withCredentials: true,
 })
@@ -38,9 +40,15 @@ myAxios.interceptors.response.use(
         if (refreshToken && !(response.config as any).__isRetryRequest) {
           try {
             ;(response.config as any).__isRetryRequest = true
-            const refreshRes = await axios.post('http://localhost:8123/api/user/token/refresh', {
-              refreshToken,
-            })
+            const refreshRes = await axios.post(
+              `${API_BASE_URL}/user/token/refresh`,
+              {
+                refreshToken,
+              },
+              {
+                withCredentials: true,
+              },
+            )
             if (refreshRes.data.code === 0 && refreshRes.data.data?.accessToken) {
               saveAuthTokens(refreshRes.data.data.accessToken, refreshRes.data.data.refreshToken)
               response.config.headers = response.config.headers || {}

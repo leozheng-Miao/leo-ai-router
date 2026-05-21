@@ -37,16 +37,16 @@ public class StripeConfig {
     @PostConstruct
     public void init() {
         if (!StringUtils.hasText(apiKey)) {
-            log.warn("Stripe API 密钥未配置,请在 application.yml 中配置测试密钥");
+            log.warn("Stripe API 密钥未配置，Stripe 支付将不可用");
             return;
         }
         Stripe.apiKey = apiKey;
         if (apiKey.startsWith("sk_test_")) {
-            log.info("Stripe API 初始化完成 - 沙箱环境(测试模式)");
-            log.info("支付成功回调URL: {}", successUrl);
-            log.info("支付取消回调URL: {}", cancelUrl);
+            log.info("Stripe API 初始化完成 - 测试模式");
+        } else if (apiKey.startsWith("sk_live_")) {
+            log.info("Stripe API 初始化完成 - 生产模式");
         } else {
-            log.warn("检测到非测试密钥,请确保使用 sk_test_ 开头的测试密钥");
+            log.warn("Stripe API 密钥格式无法识别，请确认配置正确");
         }
     }
 }

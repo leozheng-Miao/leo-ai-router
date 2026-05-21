@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 public class AuthTokenServiceImpl implements AuthTokenService {
 
     private static final String REFRESH_PREFIX = "auth:refresh:";
+    private static final String REFRESH_INDEX_PREFIX = "auth:refresh:index:";
     private static final String ACCESS_BLACKLIST_PREFIX = "auth:access:blacklist:";
 
     @Resource
@@ -66,26 +67,19 @@ public class AuthTokenServiceImpl implements AuthTokenService {
         session.setUserAgent(request == null ? null : request.getHeader("User-Agent"));
         session.setCreateTime(Instant.now().getEpochSecond());
         session.setUpdateTime(session.getCreateTime());
+        long refreshTtl = authProperties.getJwt().getRefreshTokenTtlSeconds();
         getRefreshMap(user.getId()).put(deviceId, session,
-                authProperties.getJwt().getRefreshTokenTtlSeconds(), TimeUnit.SECONDS);
+                refreshTtl, TimeUnit.SECONDS);
+        redissonClient.<String>getBucket(REFRESH_INDEX_PREFIX + deviceId)
+                .set(String.valueOf(user.getId()), refreshTtl, TimeUnit.SECONDS);
         return buildLoginVO(user, accessToken, refreshToken);
     }
 
     @Override
     public AuthLoginVO refresh(String refreshToken, HttpServletRequest request) {
         RefreshTokenParts parts = parseRefreshToken(refreshToken);
-        RefreshSession session = null;
-        Long userId = null;
-        for (String key : redissonClient.getKeys().getKeysByPattern(REFRESH_PREFIX + "*")) {
-            String userIdStr = key.substring(REFRESH_PREFIX.length());
-            RMapCache<String, RefreshSession> map = redissonClient.getMapCache(key);
-            RefreshSession item = map.get(parts.deviceId());
-            if (item != null) {
-                session = item;
-                userId = Long.valueOf(userIdStr);
-                break;
-            }
-        }
+        Long userId = resolveRefreshUserId(parts.deviceId());
+        RefreshSession session = userId == null ? null : getRefreshMap(userId).get(parts.deviceId());
         if (session == null || !session.getRefreshTokenHash().equals(jwtUtils.sha256(refreshToken))) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "refreshToken 无效");
         }
@@ -100,8 +94,11 @@ public class AuthTokenServiceImpl implements AuthTokenService {
         session.setClientIp(request == null ? session.getClientIp() : request.getRemoteAddr());
         session.setUserAgent(request == null ? session.getUserAgent() : request.getHeader("User-Agent"));
         session.setUpdateTime(Instant.now().getEpochSecond());
+        long refreshTtl = authProperties.getJwt().getRefreshTokenTtlSeconds();
         getRefreshMap(user.getId()).put(parts.deviceId(), session,
-                authProperties.getJwt().getRefreshTokenTtlSeconds(), TimeUnit.SECONDS);
+                refreshTtl, TimeUnit.SECONDS);
+        redissonClient.<String>getBucket(REFRESH_INDEX_PREFIX + parts.deviceId())
+                .set(String.valueOf(user.getId()), refreshTtl, TimeUnit.SECONDS);
         return buildLoginVO(user, accessToken, newRefreshToken);
     }
 
@@ -118,9 +115,11 @@ public class AuthTokenServiceImpl implements AuthTokenService {
         }
         if (StrUtil.isNotBlank(refreshToken)) {
             RefreshTokenParts parts = parseRefreshToken(refreshToken);
-            for (String key : redissonClient.getKeys().getKeysByPattern(REFRESH_PREFIX + "*")) {
-                redissonClient.<String, RefreshSession>getMapCache(key).remove(parts.deviceId());
+            Long userId = resolveRefreshUserId(parts.deviceId());
+            if (userId != null) {
+                getRefreshMap(userId).remove(parts.deviceId());
             }
+            redissonClient.getBucket(REFRESH_INDEX_PREFIX + parts.deviceId()).delete();
         }
     }
 
@@ -150,6 +149,19 @@ public class AuthTokenServiceImpl implements AuthTokenService {
 
     private RMapCache<String, RefreshSession> getRefreshMap(Long userId) {
         return redissonClient.getMapCache(REFRESH_PREFIX + userId);
+    }
+
+    private Long resolveRefreshUserId(String deviceId) {
+        String userId = redissonClient.<String>getBucket(REFRESH_INDEX_PREFIX + deviceId).get();
+        if (StrUtil.isBlank(userId)) {
+            return null;
+        }
+        try {
+            return Long.valueOf(userId);
+        } catch (NumberFormatException e) {
+            redissonClient.getBucket(REFRESH_INDEX_PREFIX + deviceId).delete();
+            return null;
+        }
     }
 
     private RefreshTokenParts parseRefreshToken(String refreshToken) {

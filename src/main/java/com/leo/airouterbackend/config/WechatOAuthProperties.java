@@ -13,6 +13,6 @@ public class WechatOAuthProperties {
     private String appId;
     private String appSecret;
     private String redirectUri;
-    private String frontendSuccessUrl = "http://localhost:5173/oauth/wechat/callback";
+    private String frontendSuccessUrl;
     private long stateTtlSeconds = 300L;
 }

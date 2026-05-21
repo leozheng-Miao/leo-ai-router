@@ -1,0 +1,105 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: leo-ai-router-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-leo_ai_router}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./deploy/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: leo-ai-router-redis
+    restart: unless-stopped
+    environment:
+      LEO_REDIS_PASSWORD: ${LEO_REDIS_PASSWORD}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${LEO_REDIS_PASSWORD}"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${LEO_REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leo-ai-router-backend
+    restart: unless-stopped
+    env_file:
+      - ${PROD_ENV_FILE:-./deploy/.env.production}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8123
+      LEO_DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-leo_ai_router}?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      LEO_DB_USERNAME: root
+      LEO_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      LEO_REDIS_HOST: redis
+      LEO_REDIS_PORT: 6379
+      LEO_REDIS_PASSWORD: ${LEO_REDIS_PASSWORD}
+      LEO_REDIS_DATABASE: ${LEO_REDIS_DATABASE:-0}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "8123"
+
+  frontend:
+    build:
+      context: ./leo-ai-router-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_OPENAPI_SCHEMA_URL: ${VITE_OPENAPI_SCHEMA_URL}
+    container_name: leo-ai-router-frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: leo-ai-router-nginx
+    restart: unless-stopped
+    environment:
+      FRONTEND_DOMAIN: ${FRONTEND_DOMAIN}
+      BACKEND_DOMAIN: ${BACKEND_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${NGINX_CONF_TEMPLATE:-./deploy/nginx/http.conf.template}:/etc/nginx/templates/default.conf.template:ro
+      - certbot-www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - frontend
+      - backend
+
+  certbot:
+    image: certbot/certbot:v3.0.1
+    container_name: leo-ai-router-certbot
+    volumes:
+      - certbot-www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+
+volumes:
+  mysql-data:
+  redis-data:
+  certbot-www:
+  letsencrypt:

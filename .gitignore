@@ -1,5 +1,10 @@
 logs
 src/main/resources/application-local.yml
+docs/deploy-real-values.local.md
+deploy.production.local.env
+deploy/.env.production
+deploy/mysql/init/*.sql
+!deploy/mysql/init/.gitkeep
 HELP.md
 target/
 .mvn/wrapper/maven-wrapper.jar

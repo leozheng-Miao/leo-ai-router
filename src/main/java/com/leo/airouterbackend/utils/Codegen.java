@@ -10,9 +10,10 @@ public class Codegen {
     public static void main(String[] args) {
         //配置数据源
         HikariDataSource dataSource = new HikariDataSource();
-        dataSource.setJdbcUrl("jdbc:mysql://127.0.0.1:3306/leo_ai_router?characterEncoding=utf-8");
-        dataSource.setUsername("root");
-        dataSource.setPassword("clx740329");
+        dataSource.setJdbcUrl(System.getenv().getOrDefault("LEO_CODEGEN_DB_URL",
+                "jdbc:mysql://127.0.0.1:3306/leo_ai_router?characterEncoding=utf-8"));
+        dataSource.setUsername(System.getenv().getOrDefault("LEO_CODEGEN_DB_USERNAME", "root"));
+        dataSource.setPassword(System.getenv().getOrDefault("LEO_CODEGEN_DB_PASSWORD", ""));
 
         //创建配置内容，两种风格都可以。
 //        GlobalConfig globalConfig = createGlobalConfigUseStyle1();

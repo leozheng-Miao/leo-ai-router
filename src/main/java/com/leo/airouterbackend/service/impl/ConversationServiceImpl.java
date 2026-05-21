@@ -44,6 +44,7 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
     private static final int PREVIEW_MAX_CODE_POINTS = 50;
     private static final Duration LIST_CACHE_TTL = Duration.ofSeconds(30);
     private static final long REDIS_SCAN_COUNT = 100L;
+    private static final String CONVERSATION_SEQ_PREFIX = "conv:seq:";
 
     @Resource
     private ConversationMessageMapper conversationMessageMapper;
@@ -151,6 +152,7 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
         conversation.setIsDeleted(1);
         boolean updated = this.updateById(conversation);
         if (updated) {
+            stringRedisTemplate.delete(CONVERSATION_SEQ_PREFIX + conversationId);
             evictUserConversationListCache(userId);
         }
         return updated;

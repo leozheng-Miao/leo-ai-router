@@ -35,21 +35,14 @@ public class RateLimitAspect {
         }
         HttpServletRequest request = attributes.getRequest();
 
-        // 根据限流类型获取限流 key
-        String limitKey = getLimitKey(rateLimit, request);
-        if (limitKey == null) {
+        LimitCheck limitCheck = checkLimit(rateLimit, request);
+        if (limitCheck == null) {
             return joinPoint.proceed();
         }
 
-        // 将 TimeUnit 转换为 Duration
-        Duration duration = toDuration(rateLimit.window(), rateLimit.timeUnit());
-
-        // 执行限流检查
-        boolean allowed = rateLimitService.tryAcquire(limitKey, rateLimit.limit(), duration);
-
-        if (!allowed) {
+        if (!limitCheck.allowed()) {
             log.warn("Rate limit exceeded, key: {}, limit: {}/{} {}",
-                    limitKey, rateLimit.limit(), rateLimit.window(), rateLimit.timeUnit());
+                    limitCheck.logKey(), rateLimit.limit(), rateLimit.window(), rateLimit.timeUnit());
             throw new BusinessException(ErrorCode.TOO_MANY_REQUEST, "请求过于频繁，请稍后再试");
         }
 
@@ -59,16 +52,19 @@ public class RateLimitAspect {
     /**
      * 根据限流类型获取限流 key
      */
-    private String getLimitKey(RateLimit rateLimit, HttpServletRequest request) {
+    private LimitCheck checkLimit(RateLimit rateLimit, HttpServletRequest request) {
+        Duration duration = toDuration(rateLimit.window(), rateLimit.timeUnit());
         switch (rateLimit.type()) {
             case API_KEY:
                 String authorization = request.getHeader("Authorization");
                 if (authorization != null && authorization.startsWith("Bearer ")) {
-                    return "rate_limit:api_key:" + authorization.substring(7);
+                    String apiKey = authorization.substring(7);
+                    return new LimitCheck("rate:api_key", rateLimitService.checkApiKeyRateLimit(apiKey, rateLimit.limit()));
                 }
                 return null;
             case IP:
-                return "rate_limit:ip:" + JakartaServletUtil.getClientIP(request);
+                String ip = JakartaServletUtil.getClientIP(request);
+                return new LimitCheck("rate:ip:" + ip, rateLimitService.tryAcquire("rate:ip:" + ip, rateLimit.limit(), duration));
             default:
                 return null;
         }
@@ -87,5 +83,8 @@ public class RateLimitAspect {
             case HOURS -> Duration.ofHours(amount);
             case DAYS -> Duration.ofDays(amount);
         };
+    }
+
+    private record LimitCheck(String logKey, boolean allowed) {
     }
 }

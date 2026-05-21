@@ -50,6 +50,7 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
     private static final String DEFAULT_ROUTING_STRATEGY = "auto";
     private static final String FIXED_ROUTING_STRATEGY = "fixed";
     private static final String FAILED_ASSISTANT_CONTENT = "消息发送失败，请重试";
+    private static final long SEQ_KEY_TTL_DAYS = 180L;
 
     @Resource
     private ConversationService conversationService;
@@ -252,6 +253,7 @@ public class MessageServiceImpl extends ServiceImpl<ConversationMessageMapper, C
         if (seq == null) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "生成消息序号失败");
         }
+        stringRedisTemplate.expire(key, SEQ_KEY_TTL_DAYS, java.util.concurrent.TimeUnit.DAYS);
         return seq;
     }
 

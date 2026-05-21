@@ -4,6 +4,7 @@ import com.leo.airouterbackend.annotation.AuthCheck;
 import com.leo.airouterbackend.common.BaseResponse;
 import com.leo.airouterbackend.common.ResultUtils;
 import com.leo.airouterbackend.config.AlipayPaymentConfig;
+import com.leo.airouterbackend.config.AppProperties;
 import com.leo.airouterbackend.constant.UserConstant;
 import com.leo.airouterbackend.exception.BusinessException;
 import com.leo.airouterbackend.exception.ErrorCode;
@@ -60,6 +61,9 @@ public class RechargeController {
     @Resource
     private AlipayPaymentConfig alipayPaymentConfig;
 
+    @Resource
+    private AppProperties appProperties;
+
     @PostMapping("/create")
     @AuthCheck(mustRole = UserConstant.DEFAULT_ROLE)
     @Operation(summary = "创建充值订单")
@@ -106,7 +110,7 @@ public class RechargeController {
             @RequestParam(value = "record_id", required = false) Long recordId,
             HttpServletResponse response) throws IOException {
         log.info("收到Stripe支付成功回调，SessionID：{}，recordId：{}", sessionId, recordId);
-        String targetUrl = "http://localhost:5173/recharge/cancel?method=stripe";
+        String targetUrl = appProperties.buildFrontendUrl("/recharge/cancel?method=stripe");
         try {
             if (!StringUtils.hasText(sessionId) || sessionId.contains("{CHECKOUT_SESSION_ID}")) {
                 if (recordId == null) {
@@ -121,8 +125,8 @@ public class RechargeController {
             }
             boolean success = stripePaymentProvider.handlePaymentSuccess(sessionId);
             targetUrl = success
-                    ? appendQuery("http://localhost:5173/recharge/success?method=stripe", "session_id", sessionId)
-                    : "http://localhost:5173/recharge/cancel?method=stripe";
+                    ? appendQuery(appProperties.buildFrontendUrl("/recharge/success?method=stripe"), "session_id", sessionId)
+                    : appProperties.buildFrontendUrl("/recharge/cancel?method=stripe");
         } catch (Exception e) {
             log.error("处理Stripe成功回调异常", e);
         }
@@ -136,7 +140,7 @@ public class RechargeController {
     @Operation(summary = "Stripe充值取消回调")
     public void stripeCancel(HttpServletResponse response) throws IOException {
         log.info("用户取消了Stripe支付");
-        response.sendRedirect("http://localhost:5173/recharge/cancel?method=stripe");
+        response.sendRedirect(appProperties.buildFrontendUrl("/recharge/cancel?method=stripe"));
     }
 
     @PostMapping("/alipay/notify")

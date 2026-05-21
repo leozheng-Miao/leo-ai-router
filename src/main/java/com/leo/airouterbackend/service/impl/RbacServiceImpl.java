@@ -21,6 +21,7 @@ import com.leo.airouterbackend.service.RbacService;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import org.redisson.api.RBucket;
+import org.redisson.api.RAtomicLong;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,7 @@ import java.util.stream.Collectors;
 public class RbacServiceImpl implements RbacService {
 
     private static final String PERM_CACHE_PREFIX = "rbac:permissions:";
+    private static final String PERM_CACHE_VERSION_KEY = "rbac:permissions:version";
 
     @Resource
     private UserMapper userMapper;
@@ -120,7 +122,7 @@ public class RbacServiceImpl implements RbacService {
         if (userId == null) {
             return Set.of();
         }
-        RBucket<Set<String>> bucket = redissonClient.getBucket(PERM_CACHE_PREFIX + userId);
+        RBucket<Set<String>> bucket = redissonClient.getBucket(buildPermissionCacheKey(userId));
         Set<String> cached = bucket.get();
         if (cached != null) {
             return cached;
@@ -213,7 +215,7 @@ public class RbacServiceImpl implements RbacService {
                 rolePermissionMapper.insert(rolePermission);
             }
         }
-        redissonClient.getKeys().deleteByPattern(PERM_CACHE_PREFIX + "*");
+        bumpPermissionCacheVersion();
     }
 
     @Override
@@ -282,6 +284,20 @@ public class RbacServiceImpl implements RbacService {
     }
 
     private void invalidate(Long userId) {
-        redissonClient.getBucket(PERM_CACHE_PREFIX + userId).delete();
+        redissonClient.getBucket(buildPermissionCacheKey(userId)).delete();
+    }
+
+    private String buildPermissionCacheKey(Long userId) {
+        return PERM_CACHE_PREFIX + currentPermissionCacheVersion() + ":" + userId;
+    }
+
+    private long currentPermissionCacheVersion() {
+        RAtomicLong version = redissonClient.getAtomicLong(PERM_CACHE_VERSION_KEY);
+        long value = version.get();
+        return value <= 0 ? 1L : value;
+    }
+
+    private void bumpPermissionCacheVersion() {
+        redissonClient.getAtomicLong(PERM_CACHE_VERSION_KEY).incrementAndGet();
     }
 }

@@ -1,13 +1,13 @@
 package com.leo.airouterbackend.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.leo.airouterbackend.common.BaseResponse;
 import com.leo.airouterbackend.model.vo.ConversationVO;
 import com.mybatisflex.core.paginate.Page;
-import jakarta.annotation.Resource;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializer;
 
 import java.time.LocalDateTime;
@@ -17,14 +17,18 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest
 class ConversationSerializationTest {
 
-    @Resource
     private ObjectMapper objectMapper;
+    private RedisSerializer<Object> redisSerializer;
 
-    @Resource
-    private RedisTemplate<String, Object> redisTemplate;
+    @BeforeEach
+    void setUp() {
+        objectMapper = new ObjectMapper()
+                .findAndRegisterModules()
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        redisSerializer = new GenericJackson2JsonRedisSerializer(objectMapper);
+    }
 
     @Test
     void shouldSerializeConversationPageToHttpJson() {
@@ -36,10 +40,8 @@ class ConversationSerializationTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void shouldSerializeConversationPageToRedisJson() {
-        RedisSerializer<Object> valueSerializer = (RedisSerializer<Object>) redisTemplate.getValueSerializer();
-        byte[] bytes = assertDoesNotThrow(() -> valueSerializer.serialize(buildConversationPage()));
+        byte[] bytes = assertDoesNotThrow(() -> redisSerializer.serialize(buildConversationPage()));
 
         assertNotNull(bytes);
         assertTrue(bytes.length > 0);

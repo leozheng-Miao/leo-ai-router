@@ -24,6 +24,7 @@ import com.leo.airouterbackend.utils.UserDefaultsUtils;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -273,7 +274,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             }
             return current;
         }
-        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        HttpSession session = request.getSession(false);
+        Object userObj = session == null ? null : session.getAttribute(USER_LOGIN_STATE);
         User currUser = (User) userObj;
         if (userObj == null || currUser.getId() == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "未登录");
@@ -337,11 +339,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 : null;
         String refreshToken = request.getHeader("X-Refresh-Token");
         authTokenService.logout(accessToken, refreshToken);
-        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        HttpSession session = request.getSession(false);
+        Object userObj = session == null ? null : session.getAttribute(USER_LOGIN_STATE);
         if (userObj == null && accessToken == null) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "用户未登录");
         }
-        request.getSession().removeAttribute(USER_LOGIN_STATE);
+        if (session != null) {
+            session.removeAttribute(USER_LOGIN_STATE);
+        }
         return true;
     }
 
