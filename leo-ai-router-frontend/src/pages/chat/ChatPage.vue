@@ -1,10 +1,9 @@
 <template>
-  <div class="chat-page">
-    <!-- 左侧配置栏 -->
-    <div class="chat-sidebar">
-      <div class="conversation-header">
+  <div class="chat-workspace">
+    <aside class="conversation-rail">
+      <div class="rail-header">
         <div>
-          <div class="sidebar-label">会话列表</div>
+          <div class="panel-label">会话列表</div>
           <div class="conversation-count">{{ conversations.length }} 个会话</div>
         </div>
         <a-button type="primary" size="small" class="new-conversation-btn" @click="handleCreateConversation">
@@ -20,9 +19,7 @@
             <ReloadOutlined /> 重试
           </a-button>
         </div>
-        <div v-else-if="conversations.length === 0" class="conversation-state">
-          暂无会话
-        </div>
+        <div v-else-if="conversations.length === 0" class="conversation-state">暂无会话</div>
         <div v-else class="conversation-list">
           <button
             v-for="item in conversations"
@@ -44,31 +41,7 @@
         </div>
       </div>
 
-      <a-divider style="margin: 10px 0" />
-
-      <div class="sidebar-section">
-        <div class="sidebar-label">当前会话配置</div>
-        <div class="session-card">
-          <div class="session-line">
-            <span>路由策略</span>
-            <a-tag color="blue">{{ currentStrategyLabel }}</a-tag>
-          </div>
-          <div class="session-line">
-            <span>选中模型</span>
-            <span class="session-value">{{ selectedModelLabel }}</span>
-          </div>
-          <div class="session-line">
-            <span>深度思考</span>
-            <a-tag :color="enableReasoning ? 'purple' : 'default'">
-              {{ enableReasoning ? '已开启' : '已关闭' }}
-            </a-tag>
-          </div>
-        </div>
-      </div>
-
-      <!-- Token 统计 -->
-      <div class="sidebar-section">
-        <div class="sidebar-label">本次会话统计</div>
+      <div class="rail-footer">
         <div class="stats-grid">
           <div class="stat-cell">
             <div class="stat-val">{{ sessionStats.totalMessages }}</div>
@@ -79,20 +52,29 @@
             <div class="stat-key">Token</div>
           </div>
         </div>
+        <a-button block ghost :disabled="!activeConversationId" class="sync-btn" @click="reloadCurrentConversation">
+          <ReloadOutlined /> 同步历史
+        </a-button>
       </div>
+    </aside>
 
-      <a-divider style="margin: 8px 0" />
+    <main class="chat-stage">
+      <header class="stage-header">
+        <div>
+          <div class="panel-label">当前对话</div>
+          <h1 class="stage-title">
+            {{ conversations.find((item) => item.id === activeConversationId)?.title || '新对话' }}
+          </h1>
+        </div>
+        <div class="stage-context">
+          <a-tag color="blue">{{ currentStrategyLabel }}</a-tag>
+          <a-tag :color="enableReasoning ? 'purple' : 'default'">
+            {{ enableReasoning ? '深度思考' : '标准模式' }}
+          </a-tag>
+        </div>
+      </header>
 
-      <a-button block ghost :disabled="!activeConversationId" class="clear-btn" @click="reloadCurrentConversation">
-        <ReloadOutlined /> 同步历史
-      </a-button>
-    </div>
-
-    <!-- 右侧对话区 -->
-    <div class="chat-main">
-      <!-- 消息列表 -->
       <div ref="messageListRef" class="message-list">
-        <!-- 空状态 -->
         <div v-if="messageLoading" class="empty-state">
           <div class="thinking-dots"><span></span><span></span><span></span></div>
         </div>
@@ -109,7 +91,6 @@
           </div>
         </div>
 
-        <!-- 消息列表 -->
         <template v-else>
           <div
             v-for="(msg, idx) in messages"
@@ -117,15 +98,12 @@
             class="message-row"
             :class="msg.role === 'user' ? 'message-row--user' : 'message-row--assistant'"
           >
-            <!-- Avatar -->
             <div class="msg-avatar" :class="msg.role === 'user' ? 'avatar-user' : 'avatar-ai'">
               <UserOutlined v-if="msg.role === 'user'" />
               <RobotOutlined v-else />
             </div>
 
-            <!-- 气泡 -->
             <div class="msg-bubble" :class="msg.role === 'user' ? 'bubble-user' : 'bubble-ai'">
-              <!-- AI 消息的推理内容 -->
               <div v-if="msg.reasoning && msg.role === 'assistant'" class="reasoning-block">
                 <button class="reasoning-toggle" type="button" @click="toggleReasoning(idx)">
                   <span class="reasoning-title"><BulbOutlined /> 思考过程</span>
@@ -134,13 +112,9 @@
                 <div v-if="msg.reasoningExpanded" class="reasoning-content">{{ msg.reasoning }}</div>
               </div>
 
-              <!-- 消息内容 -->
               <div class="msg-content" v-html="renderContent(msg.content)"></div>
-
-              <!-- 流式光标 -->
               <span v-if="msg.streaming" class="streaming-cursor"></span>
 
-              <!-- 底部信息 -->
               <div class="msg-meta">
                 <span class="msg-time">{{ msg.time }}</span>
                 <span v-if="msg.tokens && msg.tokens > 0" class="msg-tokens">
@@ -155,7 +129,6 @@
             </div>
           </div>
 
-          <!-- 流式加载中占位 -->
           <div v-if="isStreaming && !streamingContent" class="message-row message-row--assistant">
             <div class="msg-avatar avatar-ai"><RobotOutlined /></div>
             <div class="msg-bubble bubble-ai">
@@ -165,48 +138,7 @@
         </template>
       </div>
 
-      <!-- 输入区 -->
       <div class="input-area">
-        <div class="composer-toolbar">
-          <div class="toolbar-left">
-            <a-segmented
-              v-model:value="selectedRoutingStrategy"
-              :options="routingStrategyOptions"
-              size="large"
-            />
-            <a-button class="model-trigger" @click="modelModalOpen = true">
-              {{ selectedRoutingStrategy === 'fixed' ? `模型：${selectedModelLabel}` : `候选：${selectedModelLabel}` }}
-            </a-button>
-            <div class="reasoning-switch">
-              <span class="reasoning-switch__label">深度思考</span>
-              <a-switch v-model:checked="enableReasoning" />
-            </div>
-            <span v-if="reasoningModelWarning" class="reasoning-warning-chip">
-              {{ reasoningModelWarning }}
-            </span>
-          </div>
-          <div class="toolbar-right">
-            <span class="toolbar-tip">策略会直接透传给后端路由</span>
-          </div>
-        </div>
-        <div class="quota-strip">
-          <div class="quota-pill">
-            <span>套餐</span>
-            <strong>{{ membership.planName || '免费版' }}</strong>
-          </div>
-          <div class="quota-pill">
-            <span>普通剩余</span>
-            <strong>{{ formatRemaining(membership.dailyProRemaining) }}</strong>
-          </div>
-          <div class="quota-pill">
-            <span>高级剩余</span>
-            <strong>{{ formatRemaining(membership.dailyAdvancedRemaining) }}</strong>
-          </div>
-          <div class="quota-pill">
-            <span>积分</span>
-            <strong>{{ formatNum(membership.pointBalance ?? 0) }}</strong>
-          </div>
-        </div>
         <div class="input-wrap">
           <a-textarea
             v-model:value="inputText"
@@ -245,7 +177,58 @@
           >
         </div>
       </div>
-    </div>
+    </main>
+
+    <aside class="route-panel">
+      <section class="route-card">
+        <div class="panel-label">路由策略</div>
+        <a-segmented v-model:value="selectedRoutingStrategy" :options="routingStrategyOptions" block />
+        <div class="route-note">策略会直接透传给后端路由</div>
+      </section>
+
+      <section class="route-card">
+        <div class="panel-label">模型</div>
+        <button type="button" class="model-summary" @click="modelModalOpen = true">
+          <span>{{ selectedRoutingStrategy === 'fixed' ? '固定模型' : '候选模型' }}</span>
+          <strong>{{ selectedModelLabel }}</strong>
+        </button>
+      </section>
+
+      <section class="route-card">
+        <div class="route-line">
+          <div>
+            <div class="panel-label">深度思考</div>
+            <div class="route-note">需要模型支持 reasoning</div>
+          </div>
+          <a-switch v-model:checked="enableReasoning" />
+        </div>
+        <div v-if="reasoningModelWarning" class="reasoning-warning-chip">
+          {{ reasoningModelWarning }}
+        </div>
+      </section>
+
+      <section class="route-card">
+        <div class="panel-label">会员额度</div>
+        <div class="quota-strip">
+          <div class="quota-pill">
+            <span>套餐</span>
+            <strong>{{ membership.planName || '免费版' }}</strong>
+          </div>
+          <div class="quota-pill">
+            <span>普通剩余</span>
+            <strong>{{ formatRemaining(membership.dailyProRemaining) }}</strong>
+          </div>
+          <div class="quota-pill">
+            <span>高级剩余</span>
+            <strong>{{ formatRemaining(membership.dailyAdvancedRemaining) }}</strong>
+          </div>
+          <div class="quota-pill">
+            <span>积分</span>
+            <strong>{{ formatNum(membership.pointBalance ?? 0) }}</strong>
+          </div>
+        </div>
+      </section>
+    </aside>
 
     <a-modal v-model:open="modelModalOpen" title="选择模型" width="880px" :footer="null">
       <a-tabs v-model:activeKey="activeModelTab">
@@ -1244,81 +1227,104 @@ watch(selectedRoutingStrategy, (value) => {
 </script>
 
 <style scoped>
-.chat-page {
-  display: flex;
-  height: calc(100vh - 56px);
-  background: #f3f4f6;
+.chat-workspace {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 300px;
+  gap: 12px;
+  height: calc(100vh - var(--leo-header-height));
+  min-height: 640px;
+  padding: 12px;
+  background: var(--leo-bg-page);
   overflow: hidden;
 }
 
-/* ── 左侧配置栏 ── */
-.chat-sidebar {
-  width: 240px;
-  flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid #e5e7eb;
-  padding: 20px 16px;
+.conversation-rail,
+.chat-stage,
+.route-panel {
+  min-height: 0;
+  background: var(--leo-bg-panel);
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.conversation-rail {
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.chat-stage {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.route-panel {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   overflow-y: auto;
 }
 
-.sidebar-section {
-  margin-bottom: 12px;
+.route-panel::-webkit-scrollbar,
+.conversation-panel::-webkit-scrollbar,
+.message-list::-webkit-scrollbar {
+  width: 4px;
 }
 
-.sidebar-label {
+.route-panel::-webkit-scrollbar-thumb,
+.conversation-panel::-webkit-scrollbar-thumb,
+.message-list::-webkit-scrollbar-thumb {
+  background: var(--leo-border-strong);
+  border-radius: 4px;
+}
+
+.panel-label {
   font-size: 11px;
-  font-weight: 600;
-  color: #9ca3af;
+  font-weight: 700;
+  color: var(--leo-text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0;
   margin-bottom: 8px;
 }
 
-.conversation-header {
+.rail-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
 }
 
 .conversation-count {
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
   line-height: 1.2;
 }
 
 .new-conversation-btn {
-  border-radius: 7px;
+  border-radius: var(--leo-radius-sm);
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  background: var(--leo-primary);
 }
 
 .conversation-panel {
-  min-height: 120px;
-  max-height: 34vh;
+  flex: 1;
+  min-height: 160px;
   overflow-y: auto;
   padding-right: 2px;
 }
 
-.conversation-panel::-webkit-scrollbar {
-  width: 4px;
-}
-
-.conversation-panel::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 2px;
-}
-
 .conversation-state {
   min-height: 92px;
-  border: 1px dashed #dbe4f0;
-  border-radius: 8px;
-  color: #94a3b8;
+  border: 1px dashed var(--leo-border-strong);
+  border-radius: var(--leo-radius-md);
+  color: var(--leo-text-tertiary);
   font-size: 13px;
   display: flex;
   align-items: center;
@@ -1327,11 +1333,11 @@ watch(selectedRoutingStrategy, (value) => {
   gap: 6px;
   text-align: center;
   padding: 12px;
-  background: #f8fafc;
+  background: var(--leo-bg-muted);
 }
 
 .conversation-state--error {
-  color: #dc2626;
+  color: var(--leo-danger);
   background: #fff7f7;
   border-color: #fecaca;
 }
@@ -1345,9 +1351,9 @@ watch(selectedRoutingStrategy, (value) => {
 .conversation-item {
   position: relative;
   width: 100%;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  border-radius: 8px;
+  border: 1px solid var(--leo-border);
+  background: var(--leo-bg-panel);
+  border-radius: var(--leo-radius-md);
   padding: 10px 34px 10px 10px;
   display: flex;
   flex-direction: column;
@@ -1358,17 +1364,17 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .conversation-item:hover {
-  border-color: #93c5fd;
-  background: #f8fbff;
+  border-color: var(--leo-border-strong);
+  background: var(--leo-bg-muted);
 }
 
 .conversation-item--active {
-  border-color: #2563eb;
-  background: #eff6ff;
+  border-color: var(--leo-primary);
+  background: var(--leo-bg-active);
 }
 
 .conversation-title {
-  color: #0f172a;
+  color: var(--leo-text-primary);
   font-size: 13px;
   font-weight: 700;
   line-height: 1.3;
@@ -1378,7 +1384,7 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .conversation-preview {
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
   line-height: 1.4;
   overflow: hidden;
@@ -1387,7 +1393,7 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .conversation-time {
-  color: #94a3b8;
+  color: var(--leo-text-tertiary);
   font-size: 11px;
   line-height: 1.2;
 }
@@ -1396,7 +1402,7 @@ watch(selectedRoutingStrategy, (value) => {
   position: absolute;
   right: 8px;
   top: 9px;
-  color: #94a3b8;
+  color: var(--leo-text-tertiary);
   width: 22px;
   height: 22px;
   border-radius: 6px;
@@ -1407,14 +1413,102 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .conversation-delete:hover {
-  color: #dc2626;
+  color: var(--leo-danger);
   background: #fee2e2;
 }
 
+.rail-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stage-header {
+  min-height: 72px;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--leo-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.stage-title {
+  margin: 0;
+  max-width: 560px;
+  color: var(--leo-text-primary);
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.route-card {
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
+  padding: 12px;
+}
+
+.route-note {
+  color: var(--leo-text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.route-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.model-summary {
+  width: 100%;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-muted);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.16s ease;
+}
+
+.model-summary:hover {
+  border-color: var(--leo-primary);
+  background: var(--leo-primary-soft);
+}
+
+.model-summary span {
+  color: var(--leo-text-tertiary);
+  font-size: 12px;
+}
+
+.model-summary strong {
+  color: var(--leo-text-primary);
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .session-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #fff, #f8fafc);
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-muted);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -1427,13 +1521,13 @@ watch(selectedRoutingStrategy, (value) => {
   justify-content: space-between;
   gap: 12px;
   font-size: 13px;
-  color: #475569;
+  color: var(--leo-text-secondary);
 }
 
 .session-value {
   max-width: 120px;
   text-align: right;
-  color: #111827;
+  color: var(--leo-text-primary);
   font-weight: 600;
 }
 
@@ -1445,55 +1539,38 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .stat-cell {
-  background: #f9fafb;
-  border-radius: 8px;
+  background: var(--leo-bg-muted);
+  border-radius: var(--leo-radius-md);
   padding: 10px 8px;
   text-align: center;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--leo-border);
 }
 
 .stat-val {
   font-size: 18px;
   font-weight: 700;
-  color: #2563eb;
+  color: var(--leo-primary);
   line-height: 1.2;
 }
 
 .stat-key {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--leo-text-tertiary);
   margin-top: 2px;
 }
 
-.clear-btn {
-  border-radius: 7px;
+.sync-btn {
+  border-radius: var(--leo-radius-sm);
   font-size: 13px;
   margin-top: auto;
-}
-
-/* ── 右侧对话区 ── */
-.chat-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
 }
 
 /* 消息列表 */
 .message-list {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 16px 16px;
+  padding: 22px 18px 18px;
   scroll-behavior: smooth;
-}
-
-.message-list::-webkit-scrollbar {
-  width: 4px;
-}
-.message-list::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 2px;
 }
 
 /* 空状态 */
@@ -1509,20 +1586,20 @@ watch(selectedRoutingStrategy, (value) => {
 
 .empty-icon {
   font-size: 40px;
-  color: #d1d5db;
+  color: var(--leo-border-strong);
   margin-bottom: 16px;
 }
 
 .empty-title {
   font-size: 18px;
   font-weight: 600;
-  color: #374151;
+  color: var(--leo-text-primary);
   margin-bottom: 8px;
 }
 
 .empty-desc {
   font-size: 14px;
-  color: #9ca3af;
+  color: var(--leo-text-tertiary);
   margin-bottom: 24px;
 }
 
@@ -1536,19 +1613,19 @@ watch(selectedRoutingStrategy, (value) => {
 
 .quick-tip {
   padding: 8px 14px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
+  background: var(--leo-bg-panel);
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
   font-size: 13px;
-  color: #374151;
+  color: var(--leo-text-primary);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .quick-tip:hover {
-  border-color: #2563eb;
-  color: #2563eb;
-  background: #eff6ff;
+  border-color: var(--leo-primary);
+  color: var(--leo-primary);
+  background: var(--leo-primary-soft);
 }
 
 /* 消息行 */
@@ -1582,12 +1659,12 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .avatar-user {
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  background: var(--leo-primary);
   color: #fff;
 }
 
 .avatar-ai {
-  background: linear-gradient(135deg, #059669, #0d9488);
+  background: var(--leo-success);
   color: #fff;
 }
 
@@ -1595,22 +1672,22 @@ watch(selectedRoutingStrategy, (value) => {
 .msg-bubble {
   max-width: calc(100% - 44px);
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--leo-radius-md);
   font-size: 14px;
   line-height: 1.7;
   position: relative;
 }
 
 .bubble-user {
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  background: var(--leo-primary);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
 
 .bubble-ai {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  color: #374151;
+  background: var(--leo-bg-panel);
+  border: 1px solid var(--leo-border);
+  color: var(--leo-text-primary);
   border-bottom-left-radius: 4px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
@@ -1638,7 +1715,7 @@ watch(selectedRoutingStrategy, (value) => {
 :deep(.msg-content h4) {
   margin: 16px 0 10px;
   line-height: 1.4;
-  color: #111827;
+  color: var(--leo-text-primary);
 }
 
 :deep(.msg-content ul),
@@ -1687,8 +1764,8 @@ watch(selectedRoutingStrategy, (value) => {
   margin: 10px 0;
   padding: 8px 12px;
   border-left: 3px solid #93c5fd;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--leo-bg-muted);
+  color: var(--leo-text-secondary);
 }
 
 :deep(.table-wrapper) {
@@ -1706,18 +1783,18 @@ watch(selectedRoutingStrategy, (value) => {
 
 :deep(.msg-content th),
 :deep(.msg-content td) {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--leo-border);
   padding: 6px 8px;
   text-align: left;
 }
 
 :deep(.msg-content th) {
-  background: #f8fafc;
+  background: var(--leo-bg-muted);
 }
 
 :deep(.msg-content hr) {
   border: none;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--leo-border);
   margin: 14px 0;
 }
 
@@ -1727,9 +1804,9 @@ watch(selectedRoutingStrategy, (value) => {
 
 /* 推理内容 */
 .reasoning-block {
-  background: #f8faff;
+  background: var(--leo-bg-muted);
   border: 1px solid #bfdbfe;
-  border-radius: 8px;
+  border-radius: var(--leo-radius-md);
   padding: 10px 12px;
   margin-bottom: 10px;
   font-size: 12px;
@@ -1749,18 +1826,18 @@ watch(selectedRoutingStrategy, (value) => {
 .reasoning-title {
   font-size: 11px;
   font-weight: 600;
-  color: #2563eb;
+  color: var(--leo-primary);
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
 .reasoning-action {
-  color: #64748b;
+  color: var(--leo-text-secondary);
 }
 
 .reasoning-content {
-  color: #6b7280;
+  color: var(--leo-text-secondary);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1772,7 +1849,7 @@ watch(selectedRoutingStrategy, (value) => {
   display: inline-block;
   width: 2px;
   height: 14px;
-  background: #2563eb;
+  background: var(--leo-primary);
   margin-left: 2px;
   vertical-align: middle;
   animation: blink 0.8s step-end infinite;
@@ -1800,7 +1877,7 @@ watch(selectedRoutingStrategy, (value) => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #9ca3af;
+  background: var(--leo-text-tertiary);
   animation: bounce 1.2s ease-in-out infinite;
 }
 
@@ -1834,11 +1911,11 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .msg-time {
-  color: #9ca3af;
+  color: var(--leo-text-tertiary);
 }
 
 .msg-tokens {
-  color: #9ca3af;
+  color: var(--leo-text-tertiary);
   background: rgba(0, 0, 0, 0.05);
   border-radius: 4px;
   padding: 1px 5px;
@@ -1853,7 +1930,7 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .msg-copy {
-  color: #9ca3af;
+  color: var(--leo-text-tertiary);
   cursor: pointer;
   font-size: 12px;
   transition: color 0.15s;
@@ -1861,14 +1938,13 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .msg-copy:hover {
-  color: #2563eb;
+  color: var(--leo-primary);
 }
 
 /* ── 输入区 ── */
 .input-area {
-  border-top: 1px solid #e5e7eb;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--leo-border);
+  background: var(--leo-bg-panel);
   padding: 14px 16px 16px;
 }
 
@@ -1890,21 +1966,20 @@ watch(selectedRoutingStrategy, (value) => {
 
 .toolbar-right {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--leo-text-tertiary);
 }
 
 .quota-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
-  margin-bottom: 10px;
 }
 
 .quota-pill {
   min-width: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-muted);
   padding: 8px 10px;
   display: flex;
   justify-content: space-between;
@@ -1913,12 +1988,12 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .quota-pill span {
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
 }
 
 .quota-pill strong {
-  color: #0f172a;
+  color: var(--leo-text-primary);
   font-size: 13px;
   white-space: nowrap;
 }
@@ -1934,20 +2009,20 @@ watch(selectedRoutingStrategy, (value) => {
   gap: 8px;
   padding: 7px 10px;
   border-radius: 999px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--leo-bg-muted);
+  border: 1px solid var(--leo-border);
 }
 
 .reasoning-switch__label {
   font-size: 13px;
-  color: #475569;
+  color: var(--leo-text-secondary);
 }
 
 .reasoning-warning-chip {
   display: inline-flex;
   align-items: center;
   padding: 7px 10px;
-  border-radius: 999px;
+  border-radius: var(--leo-radius-md);
   background: #fff7ed;
   border: 1px solid #fdba74;
   color: #c2410c;
@@ -1956,15 +2031,15 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .input-wrap {
-  border: 1.5px solid #e5e7eb;
-  border-radius: 12px;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
   overflow: hidden;
   transition: border-color 0.15s;
   background: #fff;
 }
 
 .input-wrap:focus-within {
-  border-color: #2563eb;
+  border-color: var(--leo-primary);
 }
 
 .msg-input {
@@ -1991,21 +2066,21 @@ watch(selectedRoutingStrategy, (value) => {
   align-items: center;
   justify-content: space-between;
   padding: 8px 14px 10px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--leo-border);
 }
 
 .char-count {
   font-size: 12px;
-  color: #d1d5db;
+  color: var(--leo-text-tertiary);
 }
 
 .send-btn {
   height: 34px;
   padding: 0 16px;
-  border-radius: 8px;
+  border-radius: var(--leo-radius-md);
   font-size: 13px;
   font-weight: 600;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  background: var(--leo-primary);
   border: none;
   display: flex;
   align-items: center;
@@ -2023,13 +2098,13 @@ watch(selectedRoutingStrategy, (value) => {
 }
 
 .hint-warn {
-  color: #f59e0b;
+  color: var(--leo-warning);
   display: flex;
   align-items: center;
   gap: 4px;
 }
 .hint-ok {
-  color: #10b981;
+  color: var(--leo-success);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2044,23 +2119,23 @@ watch(selectedRoutingStrategy, (value) => {
 
 .model-card {
   text-align: left;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  border-radius: 14px;
+  border: 1px solid var(--leo-border);
+  background: var(--leo-bg-panel);
+  border-radius: var(--leo-radius-md);
   padding: 14px;
   cursor: pointer;
   transition: all 0.18s ease;
 }
 
 .model-card:hover {
-  border-color: #93c5fd;
+  border-color: var(--leo-primary);
   box-shadow: 0 10px 30px rgba(37, 99, 235, 0.08);
   transform: translateY(-1px);
 }
 
 .model-card--active {
-  border-color: #2563eb;
-  background: linear-gradient(180deg, #eff6ff, #ffffff);
+  border-color: var(--leo-primary);
+  background: var(--leo-primary-soft);
 }
 
 .model-card__head {
@@ -2073,7 +2148,7 @@ watch(selectedRoutingStrategy, (value) => {
 
 .model-card__title {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--leo-text-primary);
 }
 
 .model-card__meta {
@@ -2081,38 +2156,105 @@ watch(selectedRoutingStrategy, (value) => {
   gap: 10px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #475569;
+  color: var(--leo-text-secondary);
   margin-bottom: 8px;
 }
 
 .model-card__desc {
   font-size: 12px;
-  color: #64748b;
+  color: var(--leo-text-secondary);
   line-height: 1.6;
 }
 
-@media (max-width: 960px) {
-  .chat-page {
-    flex-direction: column;
+@media (max-width: 1180px) {
+  .chat-workspace {
+    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-areas:
+      "rail stage"
+      "route route";
     height: auto;
+    min-height: calc(100vh - var(--leo-header-height));
+    overflow: visible;
   }
 
-  .chat-sidebar {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid #e5e7eb;
-    max-height: 45vh;
+  .conversation-rail {
+    grid-area: rail;
+    max-height: calc(100vh - 24px - var(--leo-header-height));
+  }
+
+  .chat-stage {
+    grid-area: stage;
+    min-height: 640px;
+  }
+
+  .route-panel {
+    grid-area: route;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: visible;
+  }
+}
+
+@media (max-width: 860px) {
+  .chat-workspace {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "rail"
+      "stage"
+      "route";
+    padding: 8px;
+  }
+
+  .conversation-rail {
+    max-height: none;
   }
 
   .conversation-panel {
     max-height: 180px;
   }
 
-  .toolbar-left {
-    width: 100%;
+  .chat-stage {
+    min-height: 620px;
   }
 
-  .quota-strip {
+  .stage-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .stage-title {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .route-panel {
+    display: flex;
+  }
+}
+
+@media (max-width: 560px) {
+  .chat-workspace {
+    gap: 8px;
+  }
+
+  .message-list {
+    padding: 16px 10px;
+  }
+
+  .message-row {
+    max-width: 100%;
+  }
+
+  .msg-avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .msg-bubble {
+    max-width: calc(100% - 36px);
+  }
+
+  .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
