@@ -290,7 +290,7 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined, MailOutlined, CheckCircleFilled } from '@ant-design/icons-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
@@ -300,6 +300,7 @@ import { requestSendEmailCode } from '@/utils/sendEmailVerificationCode'
 import { saveAuthTokens } from '@/utils/authToken'
 
 const router = useRouter()
+const route = useRoute()
 const loginUserStore = useLoginUserStore()
 
 const loginTab = ref('password')
@@ -443,9 +444,20 @@ const handleLoginSuccess = (data: API.AuthLoginVO) => {
   return false
 }
 
+const getSafeRedirectPath = () => {
+  const redirect = Array.isArray(route.query.redirect) ? route.query.redirect[0] : route.query.redirect
+  if (!redirect || !redirect.startsWith('/') || redirect.startsWith('//')) {
+    return '/'
+  }
+  if (redirect.startsWith('/user/login')) {
+    return '/'
+  }
+  return redirect
+}
+
 const enterSite = () => {
   setPasswordModalVisible.value = false
-  router.push({ path: '/', replace: true })
+  router.push({ path: getSafeRedirectPath(), replace: true })
 }
 
 const handleSetPassword = async () => {

@@ -1,10 +1,10 @@
 <template>
-  <div class="membership-page">
+  <div class="membership-console">
     <section class="account-overview">
       <div>
         <div class="eyebrow">Billing console</div>
         <h1>会员与积分</h1>
-        <p>聊天额度由套餐管理，图片生成使用积分扣费。</p>
+        <p>套餐负责聊天和 API 中转权益，积分负责图片生成消耗。</p>
       </div>
       <div class="overview-grid">
         <div class="overview-item">
@@ -265,27 +265,23 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.membership-page {
-  min-height: calc(100vh - 56px);
-  padding: 28px 32px 44px;
-  background: #f5f7fb;
-  color: #0f172a;
+.membership-console {
+  min-height: calc(100vh - var(--leo-header-height) - 50px);
+  color: var(--leo-text-primary);
 }
 
 .account-overview {
-  max-width: 1280px;
-  margin: 0 auto 18px;
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(520px, 1.4fr);
   gap: 20px;
   align-items: end;
+  margin-bottom: 18px;
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--leo-primary);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -297,7 +293,7 @@ h1 {
 
 p {
   margin: 0;
-  color: #64748b;
+  color: var(--leo-text-secondary);
 }
 
 .overview-grid {
@@ -307,15 +303,15 @@ p {
 }
 
 .overview-item {
-  border: 1px solid #dbe4f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
   padding: 12px 14px;
 }
 
 .overview-item span {
   display: block;
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
 }
 
@@ -326,8 +322,6 @@ p {
 }
 
 .billing-layout {
-  max-width: 1280px;
-  margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 18px;
@@ -336,9 +330,9 @@ p {
 
 .catalog-panel,
 .summary-panel {
-  border: 1px solid #dbe4f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
 }
 
 .catalog-panel {
@@ -355,7 +349,7 @@ p {
 }
 
 .catalog-note {
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 13px;
 }
 
@@ -367,9 +361,9 @@ p {
 
 .plan-row {
   width: 100%;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
   padding: 16px;
   display: grid;
   grid-template-columns: minmax(220px, 1.3fr) minmax(320px, 1.5fr) 128px;
@@ -383,20 +377,20 @@ p {
 .plan-row.selected,
 .point-card:hover,
 .point-card.selected {
-  border-color: #2563eb;
-  background: #f8fbff;
-  box-shadow: 0 8px 26px rgba(37, 99, 235, 0.08);
+  border-color: var(--leo-primary);
+  background: var(--leo-bg-active);
+  box-shadow: 0 8px 26px rgba(36, 91, 255, 0.08);
 }
 
 .plan-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #0f172a;
+  color: var(--leo-text-primary);
 }
 
 .plan-title :deep(svg) {
-  color: #2563eb;
+  color: var(--leo-primary);
 }
 
 .plan-main p {
@@ -412,15 +406,15 @@ p {
 }
 
 .plan-metrics div {
-  border-radius: 8px;
-  background: #f8fafc;
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-muted);
   padding: 10px;
 }
 
 .plan-metrics span,
 .plan-price span {
   display: block;
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
 }
 
@@ -428,7 +422,7 @@ p {
 .plan-price strong {
   display: block;
   margin-top: 5px;
-  color: #0f172a;
+  color: var(--leo-text-primary);
 }
 
 .plan-price {
@@ -436,7 +430,7 @@ p {
 }
 
 .plan-price strong {
-  color: #2563eb;
+  color: var(--leo-primary);
   font-size: 24px;
 }
 
@@ -448,9 +442,9 @@ p {
 
 .point-card {
   min-height: 188px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
   padding: 16px;
   text-align: left;
   cursor: pointer;
@@ -462,25 +456,25 @@ p {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  color: #2563eb;
+  color: var(--leo-primary);
 }
 
 .point-card > strong {
   display: block;
   margin-top: 18px;
   font-size: 30px;
-  color: #0f172a;
+  color: var(--leo-text-primary);
 }
 
 .point-card > span,
 .point-card p {
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 13px;
 }
 
 .point-price {
   margin-top: 18px;
-  color: #2563eb;
+  color: var(--leo-primary);
   font-size: 22px;
   font-weight: 800;
 }
@@ -497,15 +491,15 @@ p {
 }
 
 .summary-product {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-muted);
   padding: 14px;
 }
 
 .summary-product span,
 .summary-lines span {
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
 }
 
@@ -540,7 +534,7 @@ p {
 }
 
 .pay-button {
-  border-radius: 8px;
+  border-radius: var(--leo-radius-md);
   font-weight: 700;
 }
 
@@ -549,14 +543,14 @@ p {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  color: #64748b;
+  color: var(--leo-text-secondary);
   font-size: 12px;
   line-height: 1.6;
 }
 
 .summary-footer :deep(svg) {
   margin-top: 3px;
-  color: #059669;
+  color: var(--leo-success);
 }
 
 @media (max-width: 1100px) {
@@ -579,10 +573,6 @@ p {
 }
 
 @media (max-width: 720px) {
-  .membership-page {
-    padding: 20px 14px 32px;
-  }
-
   .overview-grid,
   .point-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

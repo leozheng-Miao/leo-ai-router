@@ -179,17 +179,17 @@ onBeforeUnmount(() => {
 <style scoped>
 .chart-shell { position: relative; width: 100%; min-height: 360px; }
 .chart-svg { display: block; overflow: visible; }
-.grid-line { stroke: #e5e7eb; stroke-dasharray: 4 4; }
-.axis-line { stroke: #cbd5e1; }
-.axis-text { fill: #64748b; font-size: 12px; }
-.axis-text--bottom { fill: #94a3b8; }
-.bar-rect { fill: rgba(59, 130, 246, 0.18); }
-.line-token { fill: none; stroke: #2563eb; stroke-width: 3; }
-.line-cost { fill: none; stroke: #f97316; stroke-width: 3; }
-.dot-token { fill: #2563eb; }
-.dot-cost { fill: #f97316; }
+.grid-line { stroke: var(--leo-border); stroke-dasharray: 4 4; }
+.axis-line { stroke: var(--leo-border-strong); }
+.axis-text { fill: var(--leo-text-secondary); font-size: 12px; }
+.axis-text--bottom { fill: var(--leo-text-tertiary); }
+.bar-rect { fill: color-mix(in srgb, var(--leo-primary) 14%, transparent); }
+.line-token { fill: none; stroke: var(--leo-primary); stroke-width: 3; }
+.line-cost { fill: none; stroke: var(--leo-warning); stroke-width: 3; }
+.dot-token { fill: var(--leo-primary); }
+.dot-cost { fill: var(--leo-warning); }
 .hover-zone { fill: transparent; }
-.tooltip { position: absolute; pointer-events: none; z-index: 2; min-width: 156px; border-radius: 12px; padding: 12px 14px; background: rgba(15, 23, 42, 0.94); color: #e2e8f0; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.24); }
+.tooltip { position: absolute; pointer-events: none; z-index: 2; min-width: 156px; border-radius: var(--leo-radius-md); padding: 12px 14px; background: color-mix(in srgb, var(--leo-text-primary) 94%, transparent); color: var(--leo-bg-panel); box-shadow: var(--leo-shadow-pop); }
 .tooltip-title { font-weight: 700; margin-bottom: 8px; }
 .tooltip-row { font-size: 12px; line-height: 1.7; }
 </style>

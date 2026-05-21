@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomePage from '@/pages/HomePage.vue'
+import UserCenterLayout from '@/layouts/UserCenterLayout.vue'
+import { useLoginUserStore } from '@/stores/loginUser'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -8,6 +10,12 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomePage,
+    },
+    {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('@/pages/DashboardPage.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/user/login',
@@ -26,18 +34,38 @@ const router = createRouter({
     },
     {
       path: '/keys',
-      name: 'apiKeys',
-      component: () => import('@/pages/user/ApiKeyPage.vue'),
+      component: UserCenterLayout,
+      children: [
+        {
+          path: '',
+          name: 'apiKeys',
+          component: () => import('@/pages/user/ApiKeyPage.vue'),
+          meta: { requiresAuth: true },
+        },
+      ],
     },
     {
       path: '/profile',
-      name: 'profile',
-      component: () => import('@/pages/user/ProfilePage.vue'),
+      component: UserCenterLayout,
+      children: [
+        {
+          path: '',
+          name: 'profile',
+          component: () => import('@/pages/user/ProfilePage.vue'),
+          meta: { requiresAuth: true },
+        },
+      ],
     },
     {
       path: '/membership',
-      name: 'membership',
-      component: () => import('@/pages/user/MembershipPage.vue'),
+      component: UserCenterLayout,
+      children: [
+        {
+          path: '',
+          name: 'membership',
+          component: () => import('@/pages/user/MembershipPage.vue'),
+        },
+      ],
     },
     {
       path: '/recharge/success',
@@ -51,8 +79,15 @@ const router = createRouter({
     },
     {
       path: '/history',
-      name: 'history',
-      component: () => import('@/pages/user/HistoryPage.vue'),
+      component: UserCenterLayout,
+      children: [
+        {
+          path: '',
+          name: 'history',
+          component: () => import('@/pages/user/HistoryPage.vue'),
+          meta: { requiresAuth: true },
+        },
+      ],
     },
     {
       path: '/providers',
@@ -90,6 +125,26 @@ const router = createRouter({
       component: () => import('@/pages/admin/RoleManagementPage.vue'),
     },
   ],
+})
+
+router.beforeEach(async (to) => {
+  if (!to.matched.some((route) => route.meta.requiresAuth)) {
+    return true
+  }
+
+  const loginUserStore = useLoginUserStore()
+  if (!loginUserStore.loginUser.id) {
+    await loginUserStore.fetchLoginUser()
+  }
+
+  if (loginUserStore.loginUser.id) {
+    return true
+  }
+
+  return {
+    path: '/user/login',
+    query: { redirect: to.fullPath },
+  }
 })
 
 export default router

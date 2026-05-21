@@ -46,8 +46,16 @@
       </a-form>
     </a-card>
 
-    <a-card :bordered="false">
-      <a-table row-key="id" :columns="columns" :data-source="logs" :loading="loading" :pagination="pagination" @change="handleTableChange">
+    <a-card :bordered="false" class="table-card">
+      <a-table
+        row-key="id"
+        :columns="columns"
+        :data-source="logs"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 1040 }"
+        @change="handleTableChange"
+      >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'requestModel'">
             <div class="model-cell">
@@ -212,17 +220,118 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-shell { max-width: 1280px; margin: 0 auto; padding: 28px 24px 40px; }
-.page-header { margin-bottom: 20px; }
-.page-title { font-size: 24px; font-weight: 700; color: #111827; }
-.page-desc { margin-top: 6px; color: #6b7280; }
-.filter-card { margin-bottom: 16px; }
-.filter-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px 16px; }
-.filter-actions { margin-top: 16px; display: flex; justify-content: flex-end; }
-.date-input { width: 100%; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid #dbe4f0; }
-.model-cell { display: flex; flex-direction: column; }
-.model-main { color: #111827; font-weight: 600; }
-.model-sub { font-size: 12px; color: #94a3b8; }
-@media (max-width: 1200px) { .filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 768px) { .filter-grid { grid-template-columns: 1fr; } .filter-actions { justify-content: flex-start; } }
+.page-shell {
+  width: 100%;
+  padding: 0;
+}
+
+.page-header {
+  margin-bottom: 16px;
+}
+
+.page-title {
+  color: var(--leo-text-primary);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.page-desc {
+  margin-top: 6px;
+  color: var(--leo-text-secondary);
+  font-size: 13px;
+}
+
+.filter-card,
+.table-card {
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
+}
+
+.filter-card {
+  margin-bottom: 14px;
+}
+
+.filter-card :deep(.ant-card-body) {
+  padding: 16px;
+}
+
+.table-card :deep(.ant-card-body) {
+  padding: 0;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.filter-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.date-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--leo-border-strong);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
+  color: var(--leo-text-primary);
+}
+
+.date-input:focus {
+  border-color: var(--leo-primary);
+  outline: none;
+}
+
+.model-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.model-main {
+  color: var(--leo-text-primary);
+  font-weight: 700;
+}
+
+.model-sub {
+  overflow: hidden;
+  color: var(--leo-text-tertiary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.ant-table-thead > tr > th) {
+  background: var(--leo-bg-muted);
+  color: var(--leo-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+:deep(.ant-table-tbody > tr > td) {
+  color: var(--leo-text-primary);
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .filter-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    justify-content: flex-start;
+  }
+}
 </style>

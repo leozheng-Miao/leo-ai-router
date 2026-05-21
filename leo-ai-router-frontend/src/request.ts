@@ -10,6 +10,8 @@ const myAxios = axios.create({
   withCredentials: true,
 })
 
+const getCurrentRedirectPath = () => `${window.location.pathname}${window.location.search}`
+
 // 全局请求拦截器
 myAxios.interceptors.request.use(
   function (config) {
@@ -61,7 +63,7 @@ myAxios.interceptors.response.use(
         }
         clearAuthTokens()
         message.warning('请先登录')
-        window.location.href = `/user/login?redirect=${encodeURIComponent(window.location.href)}`
+        window.location.href = `/user/login?redirect=${encodeURIComponent(getCurrentRedirectPath())}`
       }
     }
     return response

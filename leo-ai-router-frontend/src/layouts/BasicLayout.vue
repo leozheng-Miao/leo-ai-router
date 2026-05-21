@@ -19,7 +19,7 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
 
 <style scoped>
 .basic-layout {
-  background: none;
+  background: var(--leo-bg-page);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -29,7 +29,7 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
   flex: 1 0 auto;
   width: 100%;
   padding: 0;
-  background: none;
+  background: var(--leo-bg-page);
   margin: 0;
   display: flex;
   flex-direction: column;

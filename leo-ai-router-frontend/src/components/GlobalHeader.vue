@@ -72,28 +72,43 @@
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="profile">
-                  <RouterLink to="/profile" style="color: #374151; text-decoration: none">
-                    <KeyOutlined /> 个人中心
-                  </RouterLink>
-                </a-menu-item>
-                <a-menu-item key="history">
-                  <RouterLink to="/history" style="color: #374151; text-decoration: none">
-                    <KeyOutlined /> 调度历史
+                  <RouterLink to="/profile" class="menu-link">
+                    <UserOutlined /> 个人中心
                   </RouterLink>
                 </a-menu-item>
                 <a-menu-item key="keys">
-                  <RouterLink to="/keys" style="color: #374151; text-decoration: none">
+                  <RouterLink to="/keys" class="menu-link">
                     <KeyOutlined /> API Keys
                   </RouterLink>
                 </a-menu-item>
+                <a-menu-item key="history">
+                  <RouterLink to="/history" class="menu-link">
+                    <BarChartOutlined /> 使用统计
+                  </RouterLink>
+                </a-menu-item>
                 <a-menu-item v-if="loginUserStore.loginUser.userRole === 'admin'" key="users">
-                  <RouterLink to="/users" style="color: #374151; text-decoration: none">
-                    <KeyOutlined /> 用户管理
+                  <RouterLink to="/users" class="menu-link">
+                    <TeamOutlined /> 用户管理
                   </RouterLink>
                 </a-menu-item>
                 <a-menu-item v-if="loginUserStore.loginUser.userRole === 'admin'" key="roles">
-                  <RouterLink to="/roles" style="color: #374151; text-decoration: none">
-                    <KeyOutlined /> 角色权限
+                  <RouterLink to="/roles" class="menu-link">
+                    <SafetyCertificateOutlined /> 角色权限
+                  </RouterLink>
+                </a-menu-item>
+                <a-menu-item v-if="loginUserStore.loginUser.userRole === 'admin'" key="providers">
+                  <RouterLink to="/providers" class="menu-link">
+                    <ClusterOutlined /> 提供者管理
+                  </RouterLink>
+                </a-menu-item>
+                <a-menu-item v-if="loginUserStore.loginUser.userRole === 'admin'" key="models">
+                  <RouterLink to="/models" class="menu-link">
+                    <AppstoreOutlined /> 模型管理
+                  </RouterLink>
+                </a-menu-item>
+                <a-menu-item v-if="loginUserStore.loginUser.userRole === 'admin'" key="plugins">
+                  <RouterLink to="/plugins" class="menu-link">
+                    <ToolOutlined /> 插件管理
                   </RouterLink>
                 </a-menu-item>
                 <a-menu-divider />
@@ -119,7 +134,19 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { DownOutlined, LogoutOutlined, FileTextOutlined, KeyOutlined } from '@ant-design/icons-vue'
+import {
+  AppstoreOutlined,
+  BarChartOutlined,
+  ClusterOutlined,
+  DownOutlined,
+  FileTextOutlined,
+  KeyOutlined,
+  LogoutOutlined,
+  SafetyCertificateOutlined,
+  TeamOutlined,
+  ToolOutlined,
+  UserOutlined,
+} from '@ant-design/icons-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { userLogout } from '@/api/userController'
 import { clearAuthTokens, getRefreshToken } from '@/utils/authToken'
@@ -131,21 +158,12 @@ const loginUserStore = useLoginUserStore()
 const navItems = computed(() => {
   const items = [
     { label: '首页', path: '/' },
+    { label: '控制台', path: '/dashboard', auth: true },
     { label: '在线对话', path: '/chat' },
     { label: 'AI 绘图', path: '/images' },
     { label: '会员充值', path: '/membership' },
   ]
-  if (loginUserStore.loginUser.userRole === 'admin') {
-    items.splice(
-      1,
-      0,
-      { label: '提供者管理', path: '/providers' },
-      { label: '模型管理', path: '/models' },
-      { label: '插件管理', path: '/plugins' },
-      { label: '角色权限', path: '/roles' },
-    )
-  }
-  return items
+  return items.filter((item) => !item.auth || loginUserStore.loginUser.id)
 })
 
 const isActive = (path: string) => (path === '/' ? route.path === '/' : route.path.startsWith(path))
@@ -327,6 +345,11 @@ const handleLogout = async () => {
   font-size: 12px;
   color: #9ca3af;
   margin-top: 1px;
+}
+
+.menu-link {
+  color: #374151;
+  text-decoration: none;
 }
 
 .btn-login {

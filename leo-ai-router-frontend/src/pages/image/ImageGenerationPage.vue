@@ -1,200 +1,213 @@
 <template>
   <div class="image-page">
-    <section class="generate-panel">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">AI 绘图</div>
-          <div class="panel-desc">输入提示词并选择模型，生成图片后可在右侧查看历史记录。</div>
-        </div>
-      </div>
-
-      <a-card :bordered="false" class="generate-card">
-        <a-form layout="vertical">
-          <a-form-item label="提示词" required>
-            <a-textarea
-              v-model:value="form.prompt"
-              :rows="7"
-              :maxlength="1200"
-              show-count
-              placeholder="例如：黄昏时分的未来主义海边城市，霓虹灯反射在潮湿路面上，电影感构图，超高细节"
-            />
-          </a-form-item>
-
-          <a-form-item label="模型选择">
-            <a-radio-group v-model:value="form.model" class="model-group">
-              <label
-                v-for="item in imageModels"
-                :key="item.modelKey"
-                class="model-card"
-                :class="{ active: form.model === item.modelKey, disabled: !canUseImageModel(item) }"
-              >
-                <input
-                  v-model="form.model"
-                  type="radio"
-                  :value="item.modelKey"
-                  :disabled="!canUseImageModel(item)"
-                  class="model-radio"
-                />
-                <div class="model-head">
-                  <span class="model-name">{{ item.modelName || item.modelKey }}</span>
-                  <span class="model-provider">{{ item.providerDisplayName || item.providerName }}</span>
-                </div>
-                <div class="model-meta">
-                  <span>{{ item.description || '图片生成模型' }}</span>
-                  <span class="model-price">{{ formatPointCost(item) }}</span>
-                </div>
-                <div v-if="isMemberOnlyImageModel(item)" class="model-lock" :class="{ open: canUseImageModel(item) }">
-                  <LockOutlined />
-                  {{ canUseImageModel(item) ? '会员模型，当前可用' : '会员模型，请先开通套餐' }}
-                </div>
-              </label>
-            </a-radio-group>
-          </a-form-item>
-
-          <div class="config-grid">
-            <a-form-item label="尺寸">
-              <a-select v-model:value="form.size" :disabled="isGeminiImageModel">
-                <a-select-option v-for="item in sizeOptions" :key="item" :value="item">
-                  {{ item }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-            <a-form-item label="质量">
-              <a-select v-model:value="form.quality" :disabled="isGeminiImageModel">
-                <a-select-option value="low">low</a-select-option>
-                <a-select-option value="medium">medium</a-select-option>
-                <a-select-option value="high">high</a-select-option>
-              </a-select>
-            </a-form-item>
-          </div>
-          <div v-if="isGeminiImageModel" class="config-hint">
-            Gemini 图片模型当前不使用尺寸和质量参数，服务端会按模型默认策略生成单图，并以 Base64 结果返回。
-          </div>
-
-          <div class="estimate-box">
-            <div class="estimate-label">预估积分</div>
-            <div class="estimate-value">{{ estimatedPoints }} 积分</div>
-            <div class="estimate-desc">
-              积分余额 {{ formatNumber(membership.pointBalance) }}，图片生成成功后扣除；失败不扣。
+    <div class="image-workspace">
+      <main class="image-main">
+        <section class="workspace-panel prompt-panel">
+          <div class="panel-header">
+            <div>
+              <div class="panel-kicker">Image Generation</div>
+              <div class="panel-title">AI 绘图</div>
+              <div class="panel-desc">输入提示词，右侧设置模型与参数。</div>
             </div>
           </div>
 
-          <div class="generate-actions">
-            <a-space>
-              <a-button
-                type="primary"
-                size="large"
-                :loading="generating"
-                :disabled="!canGenerateImage"
-                @click="handleGenerate"
-              >
-                {{ generating ? '生成中...' : '立即生成' }}
-              </a-button>
-              <a-button size="large" @click="resetForm">重置</a-button>
-            </a-space>
-            <div v-if="imageAccessWarning" class="access-warning">{{ imageAccessWarning }}</div>
+          <a-form layout="vertical">
+            <a-form-item label="提示词" required>
+              <a-textarea
+                v-model:value="form.prompt"
+                :rows="8"
+                :maxlength="1200"
+                show-count
+                placeholder="例如：黄昏时分的未来主义海边城市，霓虹灯反射在潮湿路面上，电影感构图，超高细节"
+              />
+            </a-form-item>
+
+            <div class="generate-actions">
+              <a-space wrap>
+                <a-button
+                  type="primary"
+                  size="large"
+                  :loading="generating"
+                  :disabled="!canGenerateImage"
+                  @click="handleGenerate"
+                >
+                  {{ generating ? '生成中...' : '立即生成' }}
+                </a-button>
+                <a-button size="large" @click="resetForm">重置</a-button>
+              </a-space>
+              <div v-if="imageAccessWarning" class="access-warning">{{ imageAccessWarning }}</div>
+            </div>
+          </a-form>
+        </section>
+
+        <section class="workspace-panel latest-panel">
+          <div class="section-head">
+            <div>
+              <div class="section-title">最近生成结果</div>
+              <div class="section-desc">生成成功后可在这里快速预览。</div>
+            </div>
+            <a-button v-if="latestPreview" type="link" @click="openPreview(latestPreview)">预览大图</a-button>
           </div>
 
           <div v-if="latestPreview" class="latest-preview">
-            <div class="preview-head">
-              <span>最近生成结果</span>
-              <a-button type="link" @click="openPreview(latestPreview)">预览大图</a-button>
-            </div>
             <img :src="latestPreview" alt="latest result" class="preview-image" @click="openPreview(latestPreview)" />
           </div>
-        </a-form>
-      </a-card>
-    </section>
+          <div v-else class="preview-empty">暂无最新图片</div>
+        </section>
 
-    <aside class="history-panel">
-      <div class="history-head">
-        <div>
-          <div class="panel-title">历史记录</div>
-          <div class="panel-desc">最近的图片生成任务和状态会显示在这里。</div>
-        </div>
-        <a-button size="small" @click="loadRecords">刷新</a-button>
-      </div>
+        <section class="workspace-panel history-panel">
+          <div class="history-head">
+            <div>
+              <div class="section-title">历史记录</div>
+              <div class="section-desc">最近的图片生成任务和状态会显示在这里。</div>
+            </div>
+            <a-button size="small" @click="loadRecords">刷新</a-button>
+          </div>
 
-      <a-card :bordered="false" class="history-card">
-        <div v-if="records.length === 0 && !historyLoading" class="empty-state">
-          暂无图片生成记录
-        </div>
+          <div v-if="records.length === 0 && !historyLoading" class="empty-state">
+            暂无图片生成记录
+          </div>
 
-        <div v-else class="history-list">
-          <article v-for="record in records" :key="record.id" class="history-item">
-            <div class="history-layout">
-              <div class="history-thumb-shell">
-                <img
-                  v-if="record.status === 'success' && getRecordImage(record)"
-                  :src="getRecordImage(record) || ''"
-                  alt="generated"
-                  class="thumb-image"
-                  @click="openPreview(getRecordImage(record) || '')"
-                />
-                <div v-else class="thumb-fallback">
-                  {{ record.status === 'success' ? '暂无缩略图' : '失败' }}
+          <div v-else class="history-list">
+            <article v-for="record in records" :key="record.id" class="history-item">
+              <div class="history-layout">
+                <div class="history-thumb-shell">
+                  <img
+                    v-if="record.status === 'success' && getRecordImage(record)"
+                    :src="getRecordImage(record) || ''"
+                    alt="generated"
+                    class="thumb-image"
+                    @click="openPreview(getRecordImage(record) || '')"
+                  />
+                  <div v-else class="thumb-fallback">
+                    {{ record.status === 'success' ? '暂无缩略图' : '失败' }}
+                  </div>
                 </div>
-              </div>
 
-              <div class="history-content">
-                <div class="history-item-head">
+                <div class="history-content">
                   <div class="history-title-row">
                     <div class="history-prompt">{{ record.prompt || '无提示词' }}</div>
                     <a-tag :color="record.status === 'success' ? 'green' : 'red'">
                       {{ record.status === 'success' ? '成功' : '失败' }}
                     </a-tag>
                   </div>
-                  <span class="history-time">{{ formatTime(record.createTime) }}</span>
+
+                  <div class="history-meta">
+                    <span>模型：{{ record.modelKey || '-' }}</span>
+                    <span>尺寸：{{ record.size || '-' }}</span>
+                    <span>费用：¥{{ Number(record.cost ?? 0).toFixed(4) }}</span>
+                    <span>时间：{{ formatTime(record.createTime) }}</span>
+                  </div>
+
+                  <div v-if="record.status !== 'success'" class="error-box">
+                    {{ record.errorMessage || '生成失败' }}
+                  </div>
                 </div>
 
-                <div class="history-meta history-meta--stacked">
-                  <span>模型：{{ record.modelKey || '-' }}</span>
-                  <span>尺寸：{{ record.size || '-' }}</span>
-                  <span>费用：¥{{ Number(record.cost ?? 0).toFixed(4) }}</span>
-                  <span>时间：{{ formatTime(record.createTime) }}</span>
-                </div>
-
-                <div v-if="record.status !== 'success'" class="error-box">
-                  {{ record.errorMessage || '生成失败' }}
+                <div class="history-actions">
+                  <a-button
+                    type="text"
+                    class="icon-btn"
+                    :disabled="!getRecordImage(record)"
+                    @click="getRecordImage(record) ? openPreview(getRecordImage(record) || '') : showDetail(record)"
+                  >
+                    <EyeOutlined />
+                  </a-button>
+                  <a-button
+                    type="text"
+                    class="icon-btn"
+                    :disabled="!(record.status === 'success' && getRecordImage(record))"
+                    @click="downloadImage(record)"
+                  >
+                    <DownloadOutlined />
+                  </a-button>
+                  <a-button size="small" @click="showDetail(record)">详情</a-button>
                 </div>
               </div>
+            </article>
+          </div>
 
-              <div class="history-side">
-                <div class="history-side-time">{{ formatTime(record.createTime) }}</div>
-                <div class="history-actions history-actions--icon">
-                <a-button
-                  type="text"
-                  class="icon-btn"
-                  :disabled="!getRecordImage(record)"
-                  @click="getRecordImage(record) ? openPreview(getRecordImage(record) || '') : showDetail(record)"
+          <a-pagination
+            v-if="pagination.total > pagination.pageSize"
+            class="history-pagination"
+            :current="pagination.current"
+            :page-size="pagination.pageSize"
+            :total="pagination.total"
+            :show-size-changer="true"
+            @change="handlePageChange"
+          />
+        </section>
+      </main>
+
+      <aside class="image-settings">
+        <section class="workspace-panel settings-panel">
+          <div class="section-title">生成设置</div>
+
+          <a-form layout="vertical">
+            <a-form-item label="模型选择">
+              <a-radio-group v-model:value="form.model" class="model-group">
+                <label
+                  v-for="item in imageModels"
+                  :key="item.modelKey"
+                  class="model-card"
+                  :class="{ active: form.model === item.modelKey, disabled: !canUseImageModel(item) }"
                 >
-                  <EyeOutlined />
-                </a-button>
-                <a-button
-                  type="text"
-                  class="icon-btn"
-                  :disabled="!(record.status === 'success' && getRecordImage(record))"
-                  @click="downloadImage(record)"
-                >
-                  <DownloadOutlined />
-                </a-button>
-                </div>
+                  <input
+                    v-model="form.model"
+                    type="radio"
+                    :value="item.modelKey"
+                    :disabled="!canUseImageModel(item)"
+                    class="model-radio"
+                  />
+                  <div class="model-head">
+                    <span class="model-name">{{ item.modelName || item.modelKey }}</span>
+                    <span class="model-provider">{{ item.providerDisplayName || item.providerName }}</span>
+                  </div>
+                  <div class="model-meta">
+                    <span>{{ item.description || '图片生成模型' }}</span>
+                    <span class="model-price">{{ formatPointCost(item) }}</span>
+                  </div>
+                  <div v-if="isMemberOnlyImageModel(item)" class="model-lock" :class="{ open: canUseImageModel(item) }">
+                    <LockOutlined />
+                    {{ canUseImageModel(item) ? '会员模型，当前可用' : '会员模型，请先开通套餐' }}
+                  </div>
+                </label>
+              </a-radio-group>
+            </a-form-item>
+
+            <div class="config-grid">
+              <a-form-item label="尺寸">
+                <a-select v-model:value="form.size" :disabled="isGeminiImageModel">
+                  <a-select-option v-for="item in sizeOptions" :key="item" :value="item">
+                    {{ item }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="质量">
+                <a-select v-model:value="form.quality" :disabled="isGeminiImageModel">
+                  <a-select-option value="low">low</a-select-option>
+                  <a-select-option value="medium">medium</a-select-option>
+                  <a-select-option value="high">high</a-select-option>
+                </a-select>
+              </a-form-item>
+            </div>
+            <div v-if="isGeminiImageModel" class="config-hint">
+              Gemini 图片模型当前不使用尺寸和质量参数，服务端会按模型默认策略生成单图，并以 Base64 结果返回。
+            </div>
+
+            <div class="estimate-box">
+              <div class="estimate-label">预估积分</div>
+              <div class="estimate-value">{{ estimatedPoints }} 积分</div>
+              <div class="estimate-desc">
+                积分余额 {{ formatNumber(membership.pointBalance) }}，图片生成成功后扣除；失败不扣。
               </div>
             </div>
-          </article>
-        </div>
 
-        <a-pagination
-          v-if="pagination.total > pagination.pageSize"
-          class="history-pagination"
-          :current="pagination.current"
-          :page-size="pagination.pageSize"
-          :total="pagination.total"
-          :show-size-changer="true"
-          @change="handlePageChange"
-        />
-      </a-card>
-    </aside>
+            <div v-if="imageAccessWarning" class="settings-warning">{{ imageAccessWarning }}</div>
+          </a-form>
+        </section>
+      </aside>
+    </div>
 
     <a-modal v-model:open="previewOpen" title="图片预览" width="920px" :footer="null">
       <img v-if="previewUrl" :src="previewUrl" alt="preview" class="preview-modal-image" />
@@ -556,56 +569,67 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.image-page { max-width: 1320px; margin: 0 auto; padding: 28px 24px 40px; display: grid; grid-template-columns: minmax(0, 1.2fr) 420px; gap: 20px; align-items: start; }
-.panel-header, .history-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 14px; }
-.panel-title { font-size: 24px; font-weight: 700; color: #0f172a; }
-.panel-desc { margin-top: 6px; color: #64748b; line-height: 1.7; }
-.generate-card, .history-card { border-radius: 22px; background: linear-gradient(180deg, #ffffff, #f8fbff); }
-.model-group { width: 100%; display: grid; gap: 12px; }
-.model-card { display: block; position: relative; padding: 16px 18px; border-radius: 16px; border: 1px solid #dbe4f0; background: #fff; cursor: pointer; transition: all 0.18s; }
-.model-card.active { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08); background: #f8fbff; }
-.model-card.disabled { cursor: not-allowed; background: #f8fafc; border-style: dashed; opacity: 0.78; }
+.image-page { width: min(100%, var(--leo-page-max)); margin: 0 auto; padding: 24px; }
+.image-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.image-main { display: grid; gap: 16px; min-width: 0; }
+.image-settings { position: sticky; top: calc(var(--leo-header-height) + 16px); min-width: 0; }
+.workspace-panel { background: var(--leo-bg-panel); border: 1px solid var(--leo-border); border-radius: var(--leo-radius-md); box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06); padding: 18px; }
+.panel-header, .history-head, .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.panel-kicker { color: var(--leo-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.panel-title { margin-top: 4px; color: var(--leo-text-primary); font-size: 24px; font-weight: 700; line-height: 1.3; }
+.panel-desc, .section-desc { margin-top: 4px; color: var(--leo-text-secondary); font-size: 13px; line-height: 1.6; }
+.section-title { color: var(--leo-text-primary); font-size: 16px; font-weight: 700; line-height: 1.4; }
+.settings-panel { padding-bottom: 12px; }
+.model-group { width: 100%; display: grid; gap: 10px; }
+.model-card { display: block; position: relative; padding: 12px; border-radius: var(--leo-radius-md); border: 1px solid var(--leo-border); background: var(--leo-bg-panel); cursor: pointer; transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease; }
+.model-card.active { border-color: var(--leo-primary); box-shadow: 0 0 0 3px rgba(36, 91, 255, 0.1); background: var(--leo-bg-active); }
+.model-card.disabled { cursor: not-allowed; background: var(--leo-bg-muted); border-style: dashed; opacity: 0.76; }
 .model-radio { position: absolute; opacity: 0; pointer-events: none; }
-.model-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-.model-name { font-size: 16px; font-weight: 700; color: #0f172a; }
-.model-provider { font-size: 12px; color: #2563eb; background: #eff6ff; border-radius: 999px; padding: 4px 10px; }
-.model-meta { margin-top: 10px; display: flex; justify-content: space-between; gap: 12px; color: #64748b; font-size: 13px; }
-.model-price { color: #ea580c; font-weight: 700; }
-.model-lock { margin-top: 10px; display: flex; align-items: center; gap: 6px; color: #b45309; font-size: 12px; }
-.model-lock.open { color: #059669; }
-.config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.config-hint { margin-top: -2px; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: #f8fafc; color: #64748b; font-size: 12px; line-height: 1.7; border: 1px dashed #cbd5e1; }
-.estimate-box { margin-top: 10px; padding: 16px 18px; border-radius: 18px; background: linear-gradient(135deg, #0f172a, #1d4ed8); color: #fff; }
-.estimate-label { font-size: 13px; color: rgba(255,255,255,0.72); }
-.estimate-value { margin-top: 8px; font-size: 34px; font-weight: 700; }
-.estimate-desc { margin-top: 8px; color: rgba(255,255,255,0.76); line-height: 1.7; }
-.generate-actions { margin-top: 18px; }
-.access-warning { margin-top: 10px; color: #b45309; font-size: 13px; }
-.latest-preview { margin-top: 22px; }
-.preview-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: #0f172a; font-weight: 600; }
-.preview-image { width: 100%; border-radius: 18px; background: #f1f5f9; border: 1px solid #dbe4f0; cursor: zoom-in; }
-.history-list { display: flex; flex-direction: column; gap: 14px; }
-.history-item { padding: 18px 16px; border-radius: 18px; border: 1px solid #e5edf7; background: #fff; }
-.history-layout { display: grid; grid-template-columns: 84px minmax(0, 1fr) 132px; gap: 16px; align-items: start; }
-.history-thumb-shell { width: 84px; height: 84px; border-radius: 12px; overflow: hidden; background: #f8fafc; border: 1px solid #dbe4f0; }
-.history-item-head { display: flex; justify-content: flex-start; gap: 12px; align-items: start; }
-.history-title-row { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
-.history-time { color: #94a3b8; font-size: 12px; }
-.history-side { display: flex; flex-direction: column; align-items: flex-end; gap: 14px; min-width: 132px; }
-.history-side-time { color: #94a3b8; font-size: 12px; line-height: 1.5; text-align: right; word-break: break-word; }
-.history-prompt { font-size: 15px; line-height: 1.7; color: #0f172a; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.history-meta { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; color: #64748b; }
-.history-meta--stacked { flex-direction: column; gap: 4px; }
-.thumb-image { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; background: #f8fafc; display: block; }
-.thumb-fallback { width: 100%; height: 100%; display: grid; place-items: center; font-size: 12px; color: #94a3b8; background: linear-gradient(180deg, #f8fafc, #eef2ff); }
-.error-box { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: #fff1f2; color: #be123c; font-size: 12px; line-height: 1.7; }
-.history-actions { margin-top: 12px; display: flex; gap: 10px; }
-.history-actions--icon { margin-top: 0; justify-content: flex-end; width: 100%; }
-.icon-btn { color: #60a5fa; }
-.icon-btn:disabled { color: #cbd5e1; }
-.history-pagination { margin-top: 18px; text-align: right; }
-.empty-state { padding: 36px 18px; text-align: center; color: #94a3b8; }
-.preview-modal-image { width: 100%; border-radius: 16px; }
-@media (max-width: 1120px) { .image-page { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .config-grid { grid-template-columns: 1fr; } .image-page { padding: 20px 16px 32px; } .history-layout { grid-template-columns: 1fr; } .history-thumb-shell { width: 100%; height: 180px; } .history-side { align-items: flex-start; min-width: 0; } .history-side-time { text-align: left; } .history-actions--icon { justify-content: flex-start; } }
+.model-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.model-name { color: var(--leo-text-primary); font-size: 14px; font-weight: 700; line-height: 1.4; }
+.model-provider { flex: none; color: var(--leo-primary); background: var(--leo-primary-soft); border-radius: 999px; padding: 3px 8px; font-size: 12px; line-height: 1.3; }
+.model-meta { margin-top: 8px; display: grid; gap: 6px; color: var(--leo-text-secondary); font-size: 12px; line-height: 1.5; }
+.model-price { color: var(--leo-warning); font-weight: 700; }
+.model-lock { margin-top: 8px; display: flex; align-items: center; gap: 6px; color: var(--leo-warning); font-size: 12px; line-height: 1.5; }
+.model-lock.open { color: var(--leo-success); }
+.config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.config-hint { margin: -2px 0 12px; padding: 10px 12px; border-radius: var(--leo-radius-md); background: var(--leo-bg-muted); color: var(--leo-text-secondary); font-size: 12px; line-height: 1.6; border: 1px dashed var(--leo-border-strong); }
+.estimate-box { margin-top: 4px; padding: 14px; border-radius: var(--leo-radius-md); background: var(--leo-bg-muted); border: 1px solid var(--leo-border); }
+.estimate-label { color: var(--leo-text-secondary); font-size: 12px; }
+.estimate-value { margin-top: 4px; color: var(--leo-primary); font-size: 28px; font-weight: 700; line-height: 1.2; }
+.estimate-desc { margin-top: 8px; color: var(--leo-text-secondary); font-size: 12px; line-height: 1.6; }
+.generate-actions { margin-top: 16px; display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.access-warning, .settings-warning { color: var(--leo-warning); font-size: 13px; line-height: 1.6; }
+.settings-warning { margin-top: 12px; padding: 10px 12px; border-radius: var(--leo-radius-md); background: #fff7ed; border: 1px solid #fed7aa; }
+.latest-preview { overflow: hidden; border-radius: var(--leo-radius-md); border: 1px solid var(--leo-border); background: var(--leo-bg-muted); }
+.preview-image { display: block; width: 100%; max-height: 520px; object-fit: contain; cursor: zoom-in; background: var(--leo-bg-muted); }
+.preview-empty { height: 260px; display: grid; place-items: center; border: 1px dashed var(--leo-border-strong); border-radius: var(--leo-radius-md); background: var(--leo-bg-muted); color: var(--leo-text-tertiary); }
+.history-list { display: flex; flex-direction: column; gap: 10px; }
+.history-item { padding: 12px; border-radius: var(--leo-radius-md); border: 1px solid var(--leo-border); background: var(--leo-bg-panel); }
+.history-layout { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.history-thumb-shell { width: 92px; height: 92px; border-radius: var(--leo-radius-md); overflow: hidden; background: var(--leo-bg-muted); border: 1px solid var(--leo-border); }
+.history-title-row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.history-prompt { min-width: 180px; flex: 1; color: var(--leo-text-primary); font-size: 14px; font-weight: 600; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.history-meta { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--leo-text-secondary); font-size: 12px; line-height: 1.5; }
+.thumb-image { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; background: var(--leo-bg-muted); display: block; }
+.thumb-fallback { width: 100%; height: 100%; display: grid; place-items: center; color: var(--leo-text-tertiary); background: var(--leo-bg-muted); font-size: 12px; }
+.error-box { margin-top: 8px; padding: 8px 10px; border-radius: var(--leo-radius-md); background: #fff1f2; color: var(--leo-danger); font-size: 12px; line-height: 1.6; }
+.history-actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.icon-btn { color: var(--leo-primary); }
+.icon-btn:disabled { color: var(--leo-text-tertiary); }
+.history-pagination { margin-top: 16px; text-align: right; }
+.empty-state { padding: 34px 18px; text-align: center; color: var(--leo-text-tertiary); }
+.preview-modal-image { width: 100%; border-radius: var(--leo-radius-md); }
+@media (max-width: 1120px) {
+  .image-workspace { grid-template-columns: 1fr; }
+  .image-settings { position: static; }
+}
+@media (max-width: 720px) {
+  .image-page { padding: 16px; }
+  .workspace-panel { padding: 14px; }
+  .config-grid, .history-layout { grid-template-columns: 1fr; }
+  .history-thumb-shell { width: 100%; height: 180px; }
+  .history-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .generate-actions { align-items: flex-start; }
+}
 </style>
