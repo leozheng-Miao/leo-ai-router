@@ -1,139 +1,136 @@
 <template>
-  <UserCenterLayout>
-    <div class="membership-console">
-      <section class="account-overview">
-        <div>
-          <div class="eyebrow">Billing console</div>
-          <h1>会员与积分</h1>
-          <p>套餐负责聊天和 API 中转权益，积分负责图片生成消耗。</p>
+  <div class="membership-console">
+    <section class="account-overview">
+      <div>
+        <div class="eyebrow">Billing console</div>
+        <h1>会员与积分</h1>
+        <p>套餐负责聊天和 API 中转权益，积分负责图片生成消耗。</p>
+      </div>
+      <div class="overview-grid">
+        <div class="overview-item">
+          <span>当前套餐</span>
+          <strong>{{ membership.planName || '免费版' }}</strong>
         </div>
-        <div class="overview-grid">
-          <div class="overview-item">
-            <span>当前套餐</span>
-            <strong>{{ membership.planName || '免费版' }}</strong>
-          </div>
-          <div class="overview-item">
-            <span>普通剩余</span>
-            <strong>{{ formatLimit(membership.dailyProRemaining) }}</strong>
-          </div>
-          <div class="overview-item">
-            <span>高级剩余</span>
-            <strong>{{ formatLimit(membership.dailyAdvancedRemaining) }}</strong>
-          </div>
-          <div class="overview-item">
-            <span>积分余额</span>
-            <strong>{{ formatNumber(membership.pointBalance) }}</strong>
-          </div>
+        <div class="overview-item">
+          <span>普通剩余</span>
+          <strong>{{ formatLimit(membership.dailyProRemaining) }}</strong>
         </div>
-      </section>
+        <div class="overview-item">
+          <span>高级剩余</span>
+          <strong>{{ formatLimit(membership.dailyAdvancedRemaining) }}</strong>
+        </div>
+        <div class="overview-item">
+          <span>积分余额</span>
+          <strong>{{ formatNumber(membership.pointBalance) }}</strong>
+        </div>
+      </div>
+    </section>
 
-      <section class="billing-layout">
-        <main class="catalog-panel">
-          <div class="catalog-head">
-            <a-segmented v-model:value="activeTab" :options="tabOptions" />
-            <span class="catalog-note">
-              {{ activeTab === 'plans' ? '套餐用于聊天和 API 中转额度' : '积分用于图片生成，永久有效' }}
-            </span>
-          </div>
+    <section class="billing-layout">
+      <main class="catalog-panel">
+        <div class="catalog-head">
+          <a-segmented v-model:value="activeTab" :options="tabOptions" />
+          <span class="catalog-note">
+            {{ activeTab === 'plans' ? '套餐用于聊天和 API 中转额度' : '积分用于图片生成，永久有效' }}
+          </span>
+        </div>
 
-          <div v-if="activeTab === 'plans'" class="plan-table">
-            <button
-              v-for="plan in plans"
-              :key="plan.planCode"
-              type="button"
-              class="plan-row"
-              :class="{ selected: selectedPlan?.planCode === plan.planCode }"
-              @click="selectedPlan = plan"
-            >
-              <div class="plan-main">
-                <div class="plan-title">
-                  <CrownOutlined />
-                  <strong>{{ plan.planName }}</strong>
-                  <a-tag v-if="plan.lifetime === 1" color="blue">长期</a-tag>
-                </div>
-                <p>{{ plan.description || '适合持续使用多模型聊天的账号' }}</p>
-              </div>
-              <div class="plan-metrics">
-                <div><span>普通/日</span><strong>{{ formatLimit(plan.dailyProLimit) }}</strong></div>
-                <div><span>高级/日</span><strong>{{ formatLimit(plan.dailyAdvancedLimit) }}</strong></div>
-                <div><span>赠送积分</span><strong>{{ formatNumber(plan.bonusPoints) }}</strong></div>
-              </div>
-              <div class="plan-price">
-                <strong>¥{{ formatMoney(plan.price) }}</strong>
-                <span>{{ plan.lifetime === 1 ? '永久' : `${plan.durationDays || 0} 天` }}</span>
-              </div>
-            </button>
-          </div>
-
-          <div v-else class="point-grid">
-            <button
-              v-for="pkg in pointPackages"
-              :key="pkg.packageCode"
-              type="button"
-              class="point-card"
-              :class="{ selected: selectedPackage?.packageCode === pkg.packageCode }"
-              @click="selectedPackage = pkg"
-            >
-              <div class="point-head">
-                <WalletOutlined />
-                <a-tag v-if="pkg.badge" color="blue">{{ pkg.badge }}</a-tag>
-              </div>
-              <strong>{{ formatNumber(pkg.points) }}</strong>
-              <span>积分</span>
-              <div class="point-price">¥{{ formatMoney(pkg.price) }}</div>
-              <p>¥{{ pointUnitPrice(pkg) }}/积分</p>
-            </button>
-          </div>
-        </main>
-
-        <aside class="summary-panel">
-          <div class="summary-title">支付摘要</div>
-          <div class="summary-product">
-            <span>{{ activeTab === 'plans' ? '订阅套餐' : '积分包' }}</span>
-            <strong>{{ currentName }}</strong>
-          </div>
-          <div class="summary-lines">
-            <div>
-              <span>商品金额</span>
-              <strong>¥{{ formatMoney(currentPrice) }}</strong>
-            </div>
-            <div>
-              <span>支付方式</span>
-              <strong>{{ paymentMethodText[paymentMethod] }}</strong>
-            </div>
-          </div>
-          <a-radio-group v-model:value="paymentMethod" class="pay-methods">
-            <a-radio-button value="alipay">支付宝</a-radio-button>
-            <a-radio-button value="stripe">Stripe</a-radio-button>
-            <a-tooltip title="微信支付暂未开放">
-              <a-radio-button value="wechat" disabled>微信</a-radio-button>
-            </a-tooltip>
-          </a-radio-group>
-          <a-button
-            type="primary"
-            block
-            size="large"
-            class="pay-button"
-            :loading="Boolean(submitting)"
-            @click="submitOrder"
+        <div v-if="activeTab === 'plans'" class="plan-table">
+          <button
+            v-for="plan in plans"
+            :key="plan.planCode"
+            type="button"
+            class="plan-row"
+            :class="{ selected: selectedPlan?.planCode === plan.planCode }"
+            @click="selectedPlan = plan"
           >
-            立即支付 ¥{{ formatMoney(currentPrice) }}
-          </a-button>
-          <div class="summary-footer">
-            <CheckCircleOutlined />
-            支付成功后权益实时到账，可在个人中心账单查看记录。
+            <div class="plan-main">
+              <div class="plan-title">
+                <CrownOutlined />
+                <strong>{{ plan.planName }}</strong>
+                <a-tag v-if="plan.lifetime === 1" color="blue">长期</a-tag>
+              </div>
+              <p>{{ plan.description || '适合持续使用多模型聊天的账号' }}</p>
+            </div>
+            <div class="plan-metrics">
+              <div><span>普通/日</span><strong>{{ formatLimit(plan.dailyProLimit) }}</strong></div>
+              <div><span>高级/日</span><strong>{{ formatLimit(plan.dailyAdvancedLimit) }}</strong></div>
+              <div><span>赠送积分</span><strong>{{ formatNumber(plan.bonusPoints) }}</strong></div>
+            </div>
+            <div class="plan-price">
+              <strong>¥{{ formatMoney(plan.price) }}</strong>
+              <span>{{ plan.lifetime === 1 ? '永久' : `${plan.durationDays || 0} 天` }}</span>
+            </div>
+          </button>
+        </div>
+
+        <div v-else class="point-grid">
+          <button
+            v-for="pkg in pointPackages"
+            :key="pkg.packageCode"
+            type="button"
+            class="point-card"
+            :class="{ selected: selectedPackage?.packageCode === pkg.packageCode }"
+            @click="selectedPackage = pkg"
+          >
+            <div class="point-head">
+              <WalletOutlined />
+              <a-tag v-if="pkg.badge" color="blue">{{ pkg.badge }}</a-tag>
+            </div>
+            <strong>{{ formatNumber(pkg.points) }}</strong>
+            <span>积分</span>
+            <div class="point-price">¥{{ formatMoney(pkg.price) }}</div>
+            <p>¥{{ pointUnitPrice(pkg) }}/积分</p>
+          </button>
+        </div>
+      </main>
+
+      <aside class="summary-panel">
+        <div class="summary-title">支付摘要</div>
+        <div class="summary-product">
+          <span>{{ activeTab === 'plans' ? '订阅套餐' : '积分包' }}</span>
+          <strong>{{ currentName }}</strong>
+        </div>
+        <div class="summary-lines">
+          <div>
+            <span>商品金额</span>
+            <strong>¥{{ formatMoney(currentPrice) }}</strong>
           </div>
-        </aside>
-      </section>
-    </div>
-  </UserCenterLayout>
+          <div>
+            <span>支付方式</span>
+            <strong>{{ paymentMethodText[paymentMethod] }}</strong>
+          </div>
+        </div>
+        <a-radio-group v-model:value="paymentMethod" class="pay-methods">
+          <a-radio-button value="alipay">支付宝</a-radio-button>
+          <a-radio-button value="stripe">Stripe</a-radio-button>
+          <a-tooltip title="微信支付暂未开放">
+            <a-radio-button value="wechat" disabled>微信</a-radio-button>
+          </a-tooltip>
+        </a-radio-group>
+        <a-button
+          type="primary"
+          block
+          size="large"
+          class="pay-button"
+          :loading="Boolean(submitting)"
+          @click="submitOrder"
+        >
+          立即支付 ¥{{ formatMoney(currentPrice) }}
+        </a-button>
+        <div class="summary-footer">
+          <CheckCircleOutlined />
+          支付成功后权益实时到账，可在个人中心账单查看记录。
+        </div>
+      </aside>
+    </section>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { CheckCircleOutlined, CrownOutlined, WalletOutlined } from '@ant-design/icons-vue'
-import UserCenterLayout from '@/layouts/UserCenterLayout.vue'
 import {
   getMyMembership,
   listMembershipPlans,
