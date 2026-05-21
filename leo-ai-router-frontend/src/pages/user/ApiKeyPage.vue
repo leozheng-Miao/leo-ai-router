@@ -26,6 +26,7 @@
         :data-source="apiKeys"
         :loading="loading"
         :pagination="pagination"
+        :scroll="{ x: 980 }"
         row-key="id"
         @change="handleTableChange"
       >
@@ -100,7 +101,7 @@
     <!-- 创建弹窗 -->
     <a-modal
       v-model:open="createModalVisible"
-      :title="newApiKey ? '🎉 API Key 创建成功' : '创建 API Key'"
+      :title="newApiKey ? 'API Key 创建成功' : '创建 API Key'"
       :footer="null"
       :closable="!creating"
       :mask-closable="!newApiKey"
@@ -359,30 +360,30 @@ onMounted(() => loadApiKeys())
 
 <style scoped>
 .apikey-page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 32px 24px;
+  width: 100%;
+  padding: 0;
 }
 
-/* 页头 */
 .page-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 20px;
-  gap: 16px;
+  margin-bottom: 16px;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 .page-title {
   font-size: 22px;
-  font-weight: 700;
-  color: #111827;
+  font-weight: 800;
+  color: var(--leo-text-primary);
   margin: 0 0 4px;
+  line-height: 1.25;
 }
 
 .page-desc {
   font-size: 14px;
-  color: #9ca3af;
+  color: var(--leo-text-secondary);
   margin: 0;
 }
 
@@ -390,26 +391,26 @@ onMounted(() => loadApiKeys())
   flex-shrink: 0;
   height: 38px;
   padding: 0 18px;
-  border-radius: 8px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  border-radius: var(--leo-radius-md);
+  font-weight: 700;
+  background: var(--leo-primary);
   border: none;
 }
 
 .create-btn:hover {
-  opacity: 0.9;
+  background: var(--leo-primary-hover);
 }
 
-/* 提示 */
 .tip-alert {
-  margin-bottom: 20px;
-  border-radius: 8px;
+  margin-bottom: 14px;
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
 }
 
-/* 表格卡片 */
 .table-card {
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--leo-border);
+  border-radius: var(--leo-radius-md);
+  background: var(--leo-bg-panel);
 }
 
 :deep(.ant-card-body) {
@@ -417,67 +418,65 @@ onMounted(() => loadApiKeys())
 }
 
 :deep(.ant-table-thead > tr > th) {
-  background: #f9fafb;
+  background: var(--leo-bg-muted);
   font-size: 13px;
-  font-weight: 600;
-  color: #6b7280;
-  border-bottom: 1px solid #e5e7eb;
+  font-weight: 700;
+  color: var(--leo-text-secondary);
+  border-bottom: 1px solid var(--leo-border);
 }
 
 :deep(.ant-table-tbody > tr > td) {
   font-size: 13px;
-  color: #374151;
+  color: var(--leo-text-primary);
 }
 
 :deep(.ant-table-tbody > tr:hover > td) {
-  background: #f8faff !important;
+  background: var(--leo-bg-muted) !important;
 }
 
-/* Key 展示 */
 .key-code {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--leo-bg-muted);
+  color: var(--leo-text-primary);
   padding: 2px 8px;
   border-radius: 4px;
-  border: 1px solid #e5e7eb;
-  letter-spacing: 0.5px;
+  border: 1px solid var(--leo-border);
+  letter-spacing: 0;
 }
 
 .token-count {
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
-  color: #2563eb;
+  color: var(--leo-primary);
   font-weight: 500;
 }
 
 .time-text {
-  color: #9ca3af;
+  color: var(--leo-text-tertiary);
   font-size: 12px;
 }
 
-/* 创建弹窗 */
 .modal-alert {
-  margin-bottom: 20px;
-  border-radius: 8px;
+  margin-bottom: 16px;
+  border-radius: var(--leo-radius-md);
 }
 
 .key-display-wrap {
-  background: #f8faff;
-  border: 1.5px solid #bfdbfe;
-  border-radius: 10px;
+  background: var(--leo-bg-muted);
+  border: 1px solid var(--leo-border-strong);
+  border-radius: var(--leo-radius-md);
   padding: 16px;
   margin-bottom: 12px;
 }
 
 .key-label {
   font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
+  font-weight: 700;
+  color: var(--leo-text-secondary);
   margin-bottom: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .key-display {
@@ -490,7 +489,7 @@ onMounted(() => loadApiKeys())
 .key-full {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13px;
-  color: #1d4ed8;
+  color: var(--leo-primary);
   word-break: break-all;
   flex: 1;
   background: transparent;
@@ -500,24 +499,32 @@ onMounted(() => loadApiKeys())
 
 .copy-btn {
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: var(--leo-radius-sm);
 }
 
 .key-name-display {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--leo-text-secondary);
   margin-bottom: 4px;
 }
 
 .kn-label {
-  color: #9ca3af;
+  color: var(--leo-text-tertiary);
 }
+
 .kn-value {
-  color: #374151;
+  color: var(--leo-text-primary);
   font-weight: 500;
 }
 
 .modal-footer-row {
   margin-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .page-header-left,
+  .create-btn {
+    width: 100%;
+  }
 }
 </style>
